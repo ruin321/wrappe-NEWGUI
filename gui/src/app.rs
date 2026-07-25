@@ -205,9 +205,11 @@ impl Default for WrappeApp {
 impl eframe::App for WrappeApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Check for progress updates from packing thread
+        let mut should_clear_receiver = false;
         if let Some(ref receiver) = self.progress_receiver {
             while let Ok(progress) = receiver.try_recv() {
-                self.progress_message = progress.message.clone();
+                let msg = progress.message.clone();
+                self.progress_message = msg;
                 self.progress_current = progress.current;
                 self.progress_total = progress.total;
                 if progress.total > 0 {
@@ -218,7 +220,7 @@ impl eframe::App for WrappeApp {
                     self.packing = false;
                     self.result_message = Some(progress.message);
                     self.result_error = progress.is_error;
-                    self.progress_receiver = None;
+                    should_clear_receiver = true;
                 }
 
                 if progress.is_error && progress.stage != PackStage::Done {
@@ -226,6 +228,9 @@ impl eframe::App for WrappeApp {
                     self.result_error = true;
                 }
             }
+        }
+        if should_clear_receiver {
+            self.progress_receiver = None;
         }
 
         // Top panel - title
@@ -579,7 +584,7 @@ impl WrappeApp {
         self.progress_receiver = Some(receiver);
 
         let handle = thread::spawn(move || {
-            let _ = wrappe::pack(config, |progress| {
+            let _ = wrappe::pack(config, move |progress| {
                 let _ = sender.send(progress);
             });
         });

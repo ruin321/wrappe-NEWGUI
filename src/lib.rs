@@ -10,7 +10,9 @@ mod compress;
 use compress::compress;
 
 mod args;
-pub use args::{get_available_runners, get_version_from_file, list_runners};
+pub use args::{
+    get_available_runners, get_runner_name, get_version_from_file, get_versioning, list_runners,
+};
 
 /// Configuration for a packing operation.
 #[derive(Debug, Clone)]
