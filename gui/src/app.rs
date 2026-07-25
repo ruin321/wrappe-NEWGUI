@@ -6,6 +6,7 @@ use wrappe::{PackConfig, PackProgress, PackStage};
 
 #[derive(Debug, Clone, PartialEq)]
 enum Tab {
+    Simple,
     Basic,
     Advanced,
 }
@@ -197,7 +198,7 @@ impl Default for WrappeApp {
             result_error: false,
             pack_thread: None,
             progress_receiver: None,
-            selected_tab: Tab::Basic,
+            selected_tab: Tab::Simple,
         }
     }
 }
@@ -269,12 +270,14 @@ impl eframe::App for WrappeApp {
         // Central panel - tabs
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.selected_tab, Tab::Simple, "Simple");
                 ui.selectable_value(&mut self.selected_tab, Tab::Basic, "Basic");
                 ui.selectable_value(&mut self.selected_tab, Tab::Advanced, "Advanced");
             });
             ui.separator();
 
             match self.selected_tab {
+                Tab::Simple => self.show_simple_tab(ui),
                 Tab::Basic => self.show_basic_tab(ui),
                 Tab::Advanced => self.show_advanced_tab(ui),
             }
@@ -309,6 +312,140 @@ impl eframe::App for WrappeApp {
 }
 
 impl WrappeApp {
+    fn show_simple_tab(&mut self, ui: &mut egui::Ui) {
+        ui.vertical_centered(|ui| {
+            ui.add_space(40.0);
+            ui.heading(
+                egui::RichText::new("Drop your app here")
+                    .size(28.0)
+                    .color(egui::Color32::from_rgb(100, 100, 100)),
+            );
+            ui.add_space(8.0);
+            ui.label(
+                egui::RichText::new("One click, one file. That's it.")
+                    .size(14.0)
+                    .color(egui::Color32::from_rgb(150, 150, 150)),
+            );
+            ui.add_space(30.0);
+
+            // Big drop zone / select area
+            let drop_zone = egui::Frame::none()
+                .fill(egui::Color32::from_rgb(245, 245, 245))
+                .stroke(egui::Stroke::new(2.0, egui::Color32::from_rgb(180, 180, 180)))
+                .rounding(egui::Rounding::same(12.0))
+                .inner_margin(egui::Margin::same(40.0));
+
+            drop_zone.show(ui, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(20.0);
+                    ui.label(
+                        egui::RichText::new("\u{1F4E6}")
+                            .size(64.0),
+                    );
+                    ui.add_space(12.0);
+
+                    if self.input_path.is_empty() {
+                        ui.label(
+                            egui::RichText::new("Select a folder or executable")
+                                .size(16.0)
+                                .color(egui::Color32::from_rgb(80, 80, 80)),
+                        );
+                    } else {
+                        let display = if self.input_path.len() > 60 {
+                            format!("...{}", &self.input_path[self.input_path.len().saturating_sub(57)..])
+                        } else {
+                            self.input_path.clone()
+                        };
+                        ui.label(
+                            egui::RichText::new(format!("\u{2705} {}", display))
+                                .size(16.0)
+                                .color(egui::Color32::from_rgb(0, 130, 0)),
+                        );
+                    }
+
+                    ui.add_space(16.0);
+
+                    ui.horizontal(|ui| {
+                        if ui.button(
+                            egui::RichText::new("  Pick Folder  ").size(18.0)
+                        ).clicked() {
+                            if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                                self.input_path = path.display().to_string();
+                                // Auto-fill output
+                                if self.output_path.is_empty() {
+                                    let name = path.file_name()
+                                        .map(|n| n.to_string_lossy().to_string())
+                                        .unwrap_or_else(|| "packed".to_string());
+                                    self.output_path = format!("{}-packed.exe", name);
+                                }
+                            }
+                        }
+
+                        ui.add_space(10.0);
+
+                        if ui.button(
+                            egui::RichText::new("  Pick File  ").size(18.0)
+                        ).clicked() {
+                            if let Some(path) = rfd::FileDialog::new().pick_file() {
+                                self.input_path = path.display().to_string();
+                                if self.output_path.is_empty() {
+                                    let name = path.file_stem()
+                                        .map(|n| n.to_string_lossy().to_string())
+                                        .unwrap_or_else(|| "packed".to_string());
+                                    self.output_path = format!("{}-packed.exe", name);
+                                }
+                            }
+                        }
+                    });
+
+                    ui.add_space(20.0);
+                });
+            });
+
+            ui.add_space(24.0);
+
+            // Quick compression hint
+            ui.horizontal(|ui| {
+                ui.label("Compression:");
+                ui.selectable_value(&mut self.compression, 3, "Fast");
+                ui.selectable_value(&mut self.compression, 8, "Balanced");
+                ui.selectable_value(&mut self.compression, 16, "Small");
+                ui.selectable_value(&mut self.compression, 22, "Tiny");
+            });
+
+            ui.add_space(20.0);
+
+            // Big pack button
+            ui.add_enabled_ui(!self.packing && !self.input_path.is_empty(), |ui| {
+                let btn = egui::Button::new(
+                    egui::RichText::new(if self.packing { "Packing..." } else { "GO!" })
+                        .size(36.0)
+                        .color(egui::Color32::WHITE),
+                )
+                .fill(if self.input_path.is_empty() {
+                    egui::Color32::from_rgb(180, 180, 180)
+                } else {
+                    egui::Color32::from_rgb(0, 180, 60)
+                })
+                .min_size(egui::vec2(260.0, 70.0))
+                .rounding(egui::Rounding::same(16.0));
+
+                if ui.add(btn).clicked() {
+                    self.start_packing();
+                }
+            });
+
+            if self.input_path.is_empty() {
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new("Select a folder or file first")
+                        .size(13.0)
+                        .color(egui::Color32::from_rgb(180, 180, 180)),
+                );
+            }
+        });
+    }
+
     fn show_basic_tab(&mut self, ui: &mut egui::Ui) {
         egui::Grid::new("basic_grid")
             .num_columns(3)
