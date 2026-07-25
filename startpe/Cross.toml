@@ -1,0 +1,6 @@
+[build.env]
+passthrough = [
+  "RUSTFLAGS",
+  "GIT_HASH",
+  "MACOSX_DEPLOYMENT_TARGET",
+]
