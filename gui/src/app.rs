@@ -212,7 +212,7 @@ impl eframe::App for WrappeApp {
                 let stage = progress.stage;
                 let is_err = progress.is_error;
 
-                self.progress_message = msg;
+                self.progress_message = msg.clone();
                 self.progress_current = progress.current;
                 self.progress_total = progress.total;
                 if progress.total > 0 {
@@ -221,13 +221,11 @@ impl eframe::App for WrappeApp {
 
                 if stage == PackStage::Done {
                     self.packing = false;
-                    self.result_message = Some(progress.message);
+                    self.result_message = Some(msg.clone());
                     self.result_error = is_err;
                     should_clear_receiver = true;
-                }
-
-                if is_err && stage != PackStage::Done {
-                    self.result_message = Some(format!("Error: {}", progress.message));
+                } else if is_err {
+                    self.result_message = Some(format!("Error: {}", msg));
                     self.result_error = true;
                 }
             }
