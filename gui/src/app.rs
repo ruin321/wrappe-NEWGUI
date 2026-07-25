@@ -209,6 +209,9 @@ impl eframe::App for WrappeApp {
         if let Some(ref receiver) = self.progress_receiver {
             while let Ok(progress) = receiver.try_recv() {
                 let msg = progress.message.clone();
+                let stage = progress.stage;
+                let is_err = progress.is_error;
+
                 self.progress_message = msg;
                 self.progress_current = progress.current;
                 self.progress_total = progress.total;
@@ -216,14 +219,14 @@ impl eframe::App for WrappeApp {
                     self.progress = progress.current as f32 / progress.total as f32;
                 }
 
-                if progress.stage == PackStage::Done {
+                if stage == PackStage::Done {
                     self.packing = false;
                     self.result_message = Some(progress.message);
-                    self.result_error = progress.is_error;
+                    self.result_error = is_err;
                     should_clear_receiver = true;
                 }
 
-                if progress.is_error && progress.stage != PackStage::Done {
+                if is_err && stage != PackStage::Done {
                     self.result_message = Some(format!("Error: {}", progress.message));
                     self.result_error = true;
                 }
