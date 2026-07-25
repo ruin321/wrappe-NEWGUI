@@ -231,7 +231,7 @@ fn main() {
     }
 
     // Run the pack
-    match wrappe::pack(config, |progress| {
+    match wrappe::pack(config, move |progress| {
         if quiet {
             return;
         }
