@@ -3,10 +3,6 @@ use std::path::PathBuf;
 use clap::Parser;
 use console::{style, Emoji};
 
-mod args;
-mod compress;
-mod types;
-
 #[derive(Parser)]
 #[clap(about)]
 pub struct Args {
