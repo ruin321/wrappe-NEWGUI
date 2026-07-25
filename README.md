@@ -1,10 +1,12 @@
 # wrappe
 
-[![Release](https://img.shields.io/github/release/Systemcluster/wrappe)](https://github.com/Systemcluster/wrappe/releases)
-[![Crates.io](https://img.shields.io/crates/v/wrappe)](https://crates.io/crates/wrappe)
-[![Tests & Checks](https://img.shields.io/github/actions/workflow/status/Systemcluster/wrappe/tests.yml?label=tests%20%26%20checks)](https://github.com/Systemcluster/wrappe/actions/workflows/tests.yml)
+[![Tests & Checks](https://img.shields.io/github/actions/workflow/status/ruin321/wrappe-NEWGUI/tests.yml?label=tests%20%26%20checks)](https://github.com/ruin321/wrappe-NEWGUI/actions/workflows/tests.yml)
+[![Build](https://img.shields.io/github/actions/workflow/status/ruin321/wrappe-NEWGUI/build.yml?label=build)](https://github.com/ruin321/wrappe-NEWGUI/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/ruin321/wrappe-NEWGUI)](https://github.com/ruin321/wrappe-NEWGUI/releases)
 
 **Packer for creating self-contained single-binary applications from executables and directories.**
+
+> This is a fork of [Systemcluster/wrappe](https://github.com/Systemcluster/wrappe) with added GUI support, enhanced CLI features, and improved CI/CD.
 
 ## Features
 
@@ -79,6 +81,14 @@ Options:
         Allow only one running instance
   -z, --build-dictionary
         Build compression dictionary
+  -x, --exclude <EXCLUDE>
+        Exclude files matching glob pattern (can be specified multiple times)
+  -f, --config-file <CONFIG_FILE>
+        Read configuration from a TOML file
+  -q, --quiet
+        Suppress non-error output
+      --version-from-file <VERSION_FROM_FILE>
+        Read version string from a file
   -l, --list-runners
         Print available runners
   -h, --help
@@ -216,6 +226,59 @@ This option builds a zstandard compression dictionary from the input files and s
 At least 8 input files are required to build a dictionary, and at most 128 KB of data from each input file will be sampled.
 
 Building a dictionary can increase the packing time and can in some cases negatively affect the compression ratio. It is recommended to test the results with and without this option to determine whether it is beneficial for the specific use case.
+
+#### exclude
+
+Exclude files matching a glob pattern. Can be specified multiple times.
+
+```shell
+wrappe myapp/ myapp.exe -x "*.log" -x "node_modules/**" -x ".git/**"
+```
+
+#### config-file
+
+Read packing configuration from a TOML file. CLI arguments override config file values.
+
+```toml
+# wrappe.toml
+runner = "native"
+compression = 16
+exclude = ["*.log", ".git/**"]
+env = { MY_VAR = "value" }
+```
+
+```shell
+wrappe -f wrappe.toml myapp/ myapp.exe
+```
+
+#### quiet
+
+Suppress all non-error output. Useful for scripting.
+
+```shell
+wrappe -q myapp/ myapp.exe
+```
+
+#### version-from-file
+
+Read the version string from a file (uses the first line, trimmed, max 16 characters).
+
+```shell
+wrappe myapp/ myapp.exe --version-from-file VERSION
+```
+
+## GUI
+
+wrappe also comes with a graphical user interface (`wrappe-gui`) built with egui. It provides:
+
+- File/directory pickers via native OS dialogs
+- All CLI options organized into Basic and Advanced tabs
+- Real-time progress bar during packing
+- Available for Windows and Linux
+
+```shell
+cargo run -p wrappe-gui
+```
 
 ## Performance
 

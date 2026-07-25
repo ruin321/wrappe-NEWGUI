@@ -60,6 +60,20 @@ pub fn copy_encode<R: Read, W: Write>(
     Ok(())
 }
 
+/// Helper to check if a path should be excluded
+fn should_exclude(path: &Path, patterns: &[glob::Pattern], output_path: &Path, source: &Path) -> bool {
+    if path == output_path {
+        return true;
+    }
+    // Check if path matches any exclude pattern
+    if let Ok(relative) = path.strip_prefix(source) {
+        let relative_str = relative.to_string_lossy();
+        patterns.iter().any(|pattern| pattern.matches(&relative_str))
+    } else {
+        false
+    }
+}
+
 /// Compress the payload in `source` and write it into `target`.
 /// The data is written subsequently in the following order:
 /// - compressed file contents
@@ -79,7 +93,8 @@ pub fn compress<
     S: Fn(&str) + Sync + Send,
     I: Fn(&str) + Sync + Send,
 >(
-    source: T, target: &mut W, exclude: X, compression: u32, build_dict: bool,
+    source: T, target: &mut W, exclude: X, exclude_patterns: &[glob::Pattern],
+    compression: u32, build_dict: bool,
     progress_callback: P, error_callback: E, step_callback: S, info_callback: I,
 ) -> (u64, u64, u64) {
     let source: &Path = source.as_ref();
@@ -99,6 +114,10 @@ pub fn compress<
         .filter(|entry| {
             if let Err(e) = entry {
                 error_callback(&format!("couldn't read entry: {}", e));
+                return false;
+            }
+            let entry = entry.as_ref().unwrap();
+            if should_exclude(&entry.path(), exclude_patterns, exclude, source) {
                 return false;
             }
             true

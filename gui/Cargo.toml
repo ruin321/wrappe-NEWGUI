@@ -1,0 +1,16 @@
+[package]
+name = "wrappe-gui"
+version = "1.0.6"
+edition = "2021"
+rust-version = "1.77.2"
+description = "GUI for wrappe - pack executables into self-contained single binaries"
+
+[[bin]]
+name = "wrappe-gui"
+path = "src/main.rs"
+
+[dependencies]
+wrappe = { path = ".." }
+eframe = "0.31"
+egui = "0.31"
+rfd = "0.15"

@@ -1,26 +1,11 @@
-use std::{
-    error::Error,
-    fs::File,
-    io::{BufWriter, Cursor, Write},
-    path::PathBuf,
-    time::{Duration, SystemTime},
-};
+use std::path::PathBuf;
 
 use clap::Parser;
-use console::{Emoji, style};
-use editpe::Image;
-use indicatif::{ProgressBar, ProgressStyle};
-use jwalk::WalkDir;
-use zstd::stream::copy_decode;
-
-mod types;
-use types::*;
-
-mod compress;
-use compress::compress;
+use console::{style, Emoji};
 
 mod args;
-use args::*;
+mod compress;
+mod types;
 
 #[derive(Parser)]
 #[clap(about)]
@@ -70,6 +55,18 @@ pub struct Args {
     /// Build compression dictionary
     #[arg(short = 'z', long, default_value = "false")]
     build_dictionary: bool,
+    /// Exclude files matching glob pattern (can be specified multiple times)
+    #[arg(short = 'x', long)]
+    exclude:          Vec<String>,
+    /// Read configuration from a TOML file
+    #[arg(short = 'f', long)]
+    config_file:      Option<PathBuf>,
+    /// Suppress non-error output
+    #[arg(short = 'q', long, default_value = "false")]
+    quiet:            bool,
+    /// Read version string from a file
+    #[arg(long, conflicts_with = "version_string")]
+    version_from_file: Option<PathBuf>,
     /// Print available runners
     #[arg(short = 'l', long)]
     #[allow(dead_code)]
@@ -96,330 +93,270 @@ fn main() {
     color_backtrace::install();
 
     if std::env::args().any(|arg| arg == "-l" || arg == "--list-runners") {
-        list_runners();
+        wrappe::list_runners();
         std::process::exit(0);
     }
 
-    println!(
-        "{}",
-        style(format!(
-            "{} {}",
-            env!("CARGO_PKG_NAME"),
-            env!("CARGO_PKG_VERSION"),
-        ))
-        .bold()
-        .bright(),
-    );
-
     if std::env::args().any(|arg| arg == "-V" || arg == "--version") {
+        println!(
+            "{} {}",
+            style(env!("CARGO_PKG_NAME")).bold().bright(),
+            style(env!("CARGO_PKG_VERSION")).bold().bright(),
+        );
         std::process::exit(0);
     }
 
     let args = Args::parse();
 
-    let runner = get_runner(&args.runner);
-    let runner_name = get_runner_name(&args.runner);
-    let unpack_target = get_unpack_target(&args.unpack_target);
-    let versioning = get_versioning(&args.versioning);
-    let version = get_version(args.version_string.as_deref());
-    let source = get_source(&args.input);
-    let command_path = get_command_path(args.command.as_deref(), &source);
-    let command = get_command(&command_path);
-    let output = get_output(args.output.as_deref(), &command_path);
-    let unpack_directory = get_unpack_directory(args.unpack_directory.as_deref(), &source);
-    let verification = get_verification(&args.verification);
-    let show_information = get_show_information(&args.show_information);
-    let arguments = get_arguments(&args.arguments);
-    let current_dir = get_current_dir(&args.current_dir);
-    let icon_path = get_icon_path(args.icon.as_deref());
-    let env = get_env_vars(&args.env);
+    let quiet = args.quiet;
 
-    let mut show_console = get_show_console(&args.console, runner_name);
-    let once = if args.once { 1 } else { 0 };
-    let cleanup = if args.cleanup { 1 } else { 0 };
-
-    if (versioning == 1 || versioning == 2) && once == 0 {
-        println!(
-            "{} {} {} {} {}",
-            style("note: chosen versioning").yellow().dim(),
-            style(&args.versioning).yellow().bold(),
-            style("without option").yellow().dim(),
-            style("once").yellow().bold(),
-            style("can cause unpacking to fail while the application is already running").dim(),
-        );
-    }
-    if versioning == 2 && verification != 0 {
-        println!(
-            "{} {} {}",
-            style("note: verification will be ignored with")
-                .yellow()
-                .dim(),
-            style(&args.versioning).yellow().bold(),
-            style("versioning").yellow().dim(),
-        );
-    }
-    if once == 1 && !(runner_name.contains("windows") || runner_name.contains("linux")) {
-        println!(
-            "{} {} {} {}",
-            style("note: option").yellow().dim(),
-            style("once").yellow().bold(),
-            style("is only supported for Windows and Linux runners")
-                .yellow()
-                .dim(),
-            style(format!("(target: {})", runner_name)).yellow().dim(),
-        );
-    }
-    if icon_path.is_some() && !runner_name.contains("windows") {
+    if !quiet {
         println!(
             "{}",
-            style("note: setting an executable icon is only supported for Windows runners")
-                .yellow()
-                .dim(),
+            style(format!(
+                "{} {}",
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION"),
+            ))
+            .bold()
+            .bright(),
         );
     }
 
-    if output == source {
-        println!(
-            "{}: {}",
-            style("output file can't be the input file").red(),
-            output.display()
-        );
-        std::process::exit(-1);
-    }
-    let file = File::create(&output).unwrap_or_else(|_| {
-        println!(
-            "{}: {}",
-            style("couldn't create output file").red(),
-            output.display()
-        );
-        std::process::exit(-1);
-    });
+    // Build PackConfig from args
+    let mut config = wrappe::PackConfig::default();
 
-    let canonical_current_dir = std::fs::canonicalize(std::env::current_dir().unwrap()).unwrap();
-    let relative_source = source
-        .strip_prefix(&canonical_current_dir)
-        .unwrap_or(&source);
-    let relative_source = if relative_source.components().count() == 0 {
-        &canonical_current_dir
-    } else {
-        relative_source
-    };
-    let count = if source.is_dir() {
-        println!(
-            "{} {}counting contents of {}…",
-            style("[1/4]").bold().dim(),
-            Emoji("🔍 ", ""),
-            style(relative_source.display()).blue().bright()
-        );
-        WalkDir::new(&source).skip_hidden(false).into_iter().count() as u64 - 1
-    } else {
-        println!(
-            "{} {}checking {}…",
-            style("[1/4]").bold().dim(),
-            Emoji("🔍 ", ""),
-            style(relative_source.display()).blue().bright()
-        );
-        1
-    };
-
-    println!(
-        "{} {}writing runner {} for target {}…",
-        style("[2/4]").bold().dim(),
-        Emoji("📃 ", ""),
-        style(
-            &output
-                .strip_prefix(&canonical_current_dir)
-                .unwrap_or(&output)
-                .display()
-        )
-        .blue()
-        .bright(),
-        style(&runner_name).magenta(),
-    );
-    let mut writer = BufWriter::new(file);
-    if runner_name.contains("windows") {
-        let mut decompressed = Vec::new();
-        copy_decode(Cursor::new(runner), &mut decompressed).unwrap();
-
-        let decompressed = (|| -> Result<Vec<u8>, Box<dyn Error>> {
-            let mut runner_image = Image::parse(&decompressed)?;
-            runner_image.set_subsystem(if show_console == 1 { 3 } else { 2 });
-            Ok(runner_image.data().to_owned())
-        })()
-        .unwrap_or_else(|error| {
-            println!(
-                "      {}{} {}",
-                Emoji("❗ ", ""),
-                style("failed to set subsystem for runner:").yellow(),
-                style(error).yellow()
-            );
-            decompressed
-        });
-        let decompressed = (|| -> Result<Vec<u8>, Box<dyn Error>> {
-            let mut runner_image = Image::parse(&decompressed)?;
-            let command_path = if source.is_file() {
-                source.clone()
-            } else {
-                source.join(get_command_path(args.command.as_deref(), &source))
-            };
-            let command_data = std::fs::read(command_path)?;
-            let command_image = Image::parse(command_data)?;
-            let mut command_resources = command_image
-                .resource_directory()
-                .cloned()
-                .unwrap_or_default();
-            if let Some(icon_path) = icon_path {
-                command_resources.set_main_icon(image::ImageReader::open(icon_path)?.decode()?)?;
+    // If config file specified, load it first
+    if let Some(ref config_path) = args.config_file {
+        match load_config_file(config_path) {
+            Ok(cfg) => config = cfg,
+            Err(e) => {
+                eprintln!("{}: {}", style("error reading config file").red(), e);
+                std::process::exit(-1);
             }
-            if args.console == "auto" {
-                show_console = if command_image.subsystem() == 3 { 1 } else { 0 };
-                runner_image.set_subsystem(command_image.subsystem());
-            }
-            runner_image.set_resource_directory(command_resources)?;
-            Ok(runner_image.data().to_owned())
-        })()
-        .unwrap_or_else(|error| {
-            println!(
-                "      {}{} {}",
-                Emoji("❗ ", ""),
-                style("failed to copy resources to runner:").yellow(),
-                style(error).yellow()
-            );
-            decompressed
-        });
-
-        writer.write_all(&decompressed).unwrap();
-    } else {
-        copy_decode(Cursor::new(&runner), &mut writer).unwrap();
-    }
-
-    println!(
-        "{} {}compressing {} files and directories…",
-        style("[3/4]").bold().dim(),
-        Emoji("🚚 ", ""),
-        style(count).magenta(),
-    );
-    let bar_progress =
-        ProgressBar::new(0).with_style(
-            ProgressStyle::default_bar()
-                .template("{spinner:.green} {elapsed_precise} [{wide_bar:.green}] {pos}/{len}\n{spinner:.green} {wide_msg}").unwrap(),
-        );
-    bar_progress.set_length(count);
-    bar_progress.set_position(0);
-    bar_progress.enable_steady_tick(Duration::from_millis(12));
-    let now = SystemTime::now();
-    let (compressed, read, written) = compress(
-        &source,
-        &mut writer,
-        &output,
-        args.compression,
-        args.build_dictionary,
-        || {
-            bar_progress.inc(1);
-        },
-        |message| {
-            bar_progress.inc(1);
-            bar_progress.println(format!(
-                "      {}{}",
-                Emoji("❗ ", ""),
-                style(message).red()
-            ));
-        },
-        |message| {
-            bar_progress.set_message(format!("{}", style(message).blue().bright()));
-        },
-        |message| {
-            bar_progress.println(format!(
-                "      {}{}",
-                Emoji("💡 ", ""),
-                style(message).dim()
-            ));
-        },
-    );
-    bar_progress.finish_and_clear();
-    writer.flush().unwrap();
-
-    println!(
-        "      {}{}",
-        Emoji("💾 ", ""),
-        style(format!(
-            "{:.2}MB read, {:.2}MB written, {:.2}% of original size",
-            read as f64 / 1024.0 / 1024.0,
-            written as f64 / 1024.0 / 1024.0,
-            (written as f64 / read as f64) * 100.0
-        ))
-        .dim(),
-    );
-    println!(
-        "      {}{}",
-        Emoji("📍 ", ""),
-        style(format!(
-            "took {:.2}s",
-            now.elapsed().unwrap_or_default().as_secs_f64()
-        ))
-        .dim(),
-    );
-    println!(
-        "      {}{} {} {}{}",
-        Emoji("✨ ", ""),
-        style("successfully compressed").green(),
-        style(compressed).magenta(),
-        style("files and directories").green(),
-        if compressed < count {
-            style(format!(" (skipped {})", count - compressed))
-                .bold()
-                .red()
-        } else {
-            style(String::new())
         }
-    );
-
-    println!(
-        "{} {}writing startup configuration…",
-        style("[4/4]").bold().dim(),
-        Emoji("📃 ", "")
-    );
-
-    let info = StarterInfo {
-        signature: WRAPPE_SIGNATURE,
-        show_console,
-        current_dir,
-        verification,
-        show_information,
-        cleanup,
-        uid: version.as_bytes().try_into().unwrap(),
-        unpack_target,
-        versioning,
-        unpack_directory,
-        once,
-        command,
-        arguments,
-        env,
-        wrappe_format: WRAPPE_FORMAT,
-    };
-    writer.write_all(info.as_bytes()).unwrap();
-
-    writer.flush().unwrap();
-    drop(writer);
-
-    #[cfg(any(unix, target_os = "redox"))]
-    {
-        use ::std::{
-            fs::{metadata, set_permissions},
-            os::unix::prelude::*,
-        };
-        let mode = metadata(&output)
-            .map(|metadata| metadata.permissions().mode())
-            .unwrap_or(0o755);
-        set_permissions(&output, PermissionsExt::from_mode(mode | 0o111)).unwrap_or_else(|e| {
-            eprintln!(
-                "      {} failed to set permissions for {}: {}",
-                Emoji("❗ ", ""),
-                output.display(),
-                e
-            )
-        });
     }
 
-    println!("      {}{}", Emoji("✨ ", ""), style("done!").green());
+    // Override with CLI args
+    config.runner = args.runner;
+    config.compression = args.compression;
+    config.unpack_target = args.unpack_target;
+    config.unpack_directory = args.unpack_directory;
+    config.versioning = args.versioning;
+    config.verification = args.verification;
+    config.show_information = args.show_information;
+    config.console = args.console;
+    config.current_dir = args.current_dir;
+    config.env = args.env;
+    config.icon = args.icon;
+    config.cleanup = args.cleanup;
+    config.once = args.once;
+    config.build_dictionary = args.build_dictionary;
+    config.input = args.input;
+    config.command = args.command;
+    config.output = args.output;
+    config.arguments = args.arguments;
+    config.exclude_patterns = args.exclude;
+
+    // Version string: --version-from-file overrides --version-string
+    if let Some(ref path) = args.version_from_file {
+        match wrappe::get_version_from_file(path) {
+            Ok(v) => config.version_string = Some(v),
+            Err(e) => {
+                eprintln!("{}: {}", style("error reading version file").red(), e);
+                std::process::exit(-1);
+            }
+        }
+    } else if args.version_string.is_some() {
+        config.version_string = args.version_string;
+    }
+
+    // Notes/warnings
+    let runner_name = match wrappe::get_runner_name(&config.runner) {
+        Ok(n) => n,
+        Err(e) => {
+            eprintln!("{}: {}", style("error").red(), e);
+            std::process::exit(-1);
+        }
+    };
+
+    let versioning_val = match wrappe::get_versioning(&config.versioning) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("{}: {}", style("error").red(), e);
+            std::process::exit(-1);
+        }
+    };
+
+    if !quiet {
+        if (versioning_val == 1 || versioning_val == 2) && !config.once {
+            println!(
+                "{} {} {} {} {}",
+                style("note: chosen versioning").yellow().dim(),
+                style(&config.versioning).yellow().bold(),
+                style("without option").yellow().dim(),
+                style("once").yellow().bold(),
+                style("can cause unpacking to fail while the application is already running").dim(),
+            );
+        }
+        if versioning_val == 2 && config.verification != "none" {
+            println!(
+                "{} {} {}",
+                style("note: verification will be ignored with")
+                    .yellow()
+                    .dim(),
+                style(&config.versioning).yellow().bold(),
+                style("versioning").yellow().dim(),
+            );
+        }
+        if config.once && !(runner_name.contains("windows") || runner_name.contains("linux")) {
+            println!(
+                "{} {} {} {}",
+                style("note: option").yellow().dim(),
+                style("once").yellow().bold(),
+                style("is only supported for Windows and Linux runners")
+                    .yellow()
+                    .dim(),
+                style(format!("(target: {})", runner_name)).yellow().dim(),
+            );
+        }
+        if config.icon.is_some() && !runner_name.contains("windows") {
+            println!(
+                "{}",
+                style("note: setting an executable icon is only supported for Windows runners")
+                    .yellow()
+                    .dim(),
+            );
+        }
+    }
+
+    // Run the pack
+    match wrappe::pack(config, |progress| {
+        if quiet {
+            return;
+        }
+        match progress.stage {
+            wrappe::PackStage::Counting => {
+                println!(
+                    "{} {}",
+                    style("[1/4]").bold().dim(),
+                    progress.message,
+                );
+            }
+            wrappe::PackStage::WritingRunner => {
+                println!(
+                    "{} {}",
+                    style("[2/4]").bold().dim(),
+                    progress.message,
+                );
+            }
+            wrappe::PackStage::Compressing => {
+                if progress.is_error {
+                    println!(
+                        "      {}{}",
+                        Emoji("❗ ", ""),
+                        style(&progress.message).red(),
+                    );
+                } else if !progress.message.is_empty() {
+                    println!(
+                        "      {}{}",
+                        Emoji("💡 ", ""),
+                        style(&progress.message).dim(),
+                    );
+                }
+            }
+            wrappe::PackStage::Finalizing => {
+                println!(
+                    "{} {}",
+                    style("[4/4]").bold().dim(),
+                    progress.message,
+                );
+            }
+            wrappe::PackStage::Done => {
+                println!("      {}{}", Emoji("✨ ", ""), style("done!").green());
+                if !progress.message.is_empty() {
+                    println!("      {}{}", Emoji("💾 ", ""), style(&progress.message).dim());
+                }
+            }
+        }
+    }) {
+        Ok(_result) => {}
+        Err(e) => {
+            eprintln!("{}: {}", style("error").red(), e);
+            std::process::exit(-1);
+        }
+    }
+}
+
+/// Load PackConfig from a TOML config file
+fn load_config_file(path: &PathBuf) -> Result<wrappe::PackConfig, String> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| format!("couldn't read {}: {}", path.display(), e))?;
+    let value: toml::Value = toml::from_str(&content)
+        .map_err(|e| format!("invalid TOML in {}: {}", path.display(), e))?;
+
+    let mut config = wrappe::PackConfig::default();
+
+    if let Some(v) = value.get("runner").and_then(|v| v.as_str()) {
+        config.runner = v.to_string();
+    }
+    if let Some(v) = value.get("compression").and_then(|v| v.as_integer()) {
+        config.compression = v as u32;
+    }
+    if let Some(v) = value.get("unpack_target").and_then(|v| v.as_str()) {
+        config.unpack_target = v.to_string();
+    }
+    if let Some(v) = value.get("unpack_directory").and_then(|v| v.as_str()) {
+        config.unpack_directory = Some(v.to_string());
+    }
+    if let Some(v) = value.get("versioning").and_then(|v| v.as_str()) {
+        config.versioning = v.to_string();
+    }
+    if let Some(v) = value.get("verification").and_then(|v| v.as_str()) {
+        config.verification = v.to_string();
+    }
+    if let Some(v) = value.get("version_string").and_then(|v| v.as_str()) {
+        config.version_string = Some(v.to_string());
+    }
+    if let Some(v) = value.get("show_information").and_then(|v| v.as_str()) {
+        config.show_information = v.to_string();
+    }
+    if let Some(v) = value.get("console").and_then(|v| v.as_str()) {
+        config.console = v.to_string();
+    }
+    if let Some(v) = value.get("current_dir").and_then(|v| v.as_str()) {
+        config.current_dir = v.to_string();
+    }
+    if let Some(v) = value.get("cleanup").and_then(|v| v.as_bool()) {
+        config.cleanup = v;
+    }
+    if let Some(v) = value.get("once").and_then(|v| v.as_bool()) {
+        config.once = v;
+    }
+    if let Some(v) = value.get("build_dictionary").and_then(|v| v.as_bool()) {
+        config.build_dictionary = v;
+    }
+    if let Some(v) = value.get("icon").and_then(|v| v.as_str()) {
+        config.icon = Some(PathBuf::from(v));
+    }
+    if let Some(arr) = value.get("exclude").and_then(|v| v.as_array()) {
+        config.exclude_patterns = arr
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect();
+    }
+    if let Some(table) = value.get("env").and_then(|v| v.as_table()) {
+        config.env = table
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v.as_str().unwrap_or("")))
+            .collect();
+    }
+    if let Some(arr) = value.get("arguments").and_then(|v| v.as_array()) {
+        config.arguments = arr
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect();
+    }
+
+    Ok(config)
 }

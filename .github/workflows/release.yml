@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Release (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            cli-artifact: wrappe.exe
+            cli-name: wrappe-windows-x64.exe
+            gui-artifact: wrappe-gui.exe
+            gui-name: wrappe-gui-windows-x64.exe
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            cli-artifact: wrappe
+            cli-name: wrappe-linux-x64
+            gui-artifact: wrappe-gui
+            gui-name: wrappe-gui-linux-x64
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+
+      - name: Build CLI (release)
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build GUI (release)
+        run: cargo build --release --target ${{ matrix.target }} -p wrappe-gui
+
+      - name: Rename artifacts
+        shell: bash
+        run: |
+          cp target/${{ matrix.target }}/release/${{ matrix.cli-artifact }} ${{ matrix.cli-name }}
+          cp target/${{ matrix.target }}/release/${{ matrix.gui-artifact }} ${{ matrix.gui-name }}
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ matrix.cli-name }}
+            ${{ matrix.gui-name }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

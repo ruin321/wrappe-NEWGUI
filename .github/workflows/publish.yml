@@ -4,6 +4,7 @@ on:
   workflow_run:
     branches:
       - master
+      - main
     workflows:
       - Tests & Checks
     types:
@@ -14,64 +15,16 @@ permissions: write-all
 
 jobs:
 
-  publish:
-
-    name: Publish
-    runs-on: ${{ matrix.os }}
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
-
-    outputs:
-      tag: ${{ steps.publish.outputs.tag }}
-      version: ${{ steps.publish.outputs.version }}
-
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-        toolchain:
-          - 1.77.2
-
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v6
-        with:
-          submodules: recursive
-          show-progress: false
-
-      - name: Set up Rust toolchain
-        uses: Systemcluster/actions@setup-rust-v0
-        with:
-          channel: ${{ matrix.toolchain }}
-          cache-key-job: true
-
-      - name: Prepare release
-        run: |
-          # Archive runner source
-          cd startpe && tar cf ../startpe.tar * && cd ..
-
-      - name: Publish crates
-        uses: Systemcluster/actions@release-crates-v0
-        id: publish
-        if: github.ref == 'refs/heads/master' && github.repository_owner == 'Systemcluster'
-        with:
-          crates-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          dry-run: ${{ !secrets.CARGO_REGISTRY_TOKEN }}
-          allow-dirty: true
-          tag-crate: wrappe
-
   release:
 
     name: Release
     runs-on: ubuntu-latest
-    needs: publish
-    if: ${{ needs.publish.result == 'success' && needs.publish.outputs.tag != '' && needs.publish.outputs.version != '' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
 
     strategy:
       matrix:
-        os:
-          - ubuntu-latest
         toolchain:
-          - 1.77.2
+          - stable
 
     env:
       WRAPPE_TARGETS: "aarch64-apple-darwin;x86_64-apple-darwin;x86_64-pc-windows-gnu;x86_64-unknown-linux-musl"
@@ -119,7 +72,6 @@ jobs:
         env:
           OSX_VERSION_MIN: 12.3
         run: |
-          # Build macOS toolchain
           cd $HOME
           [ -d "osxcross" ] || git clone https://github.com/tpoechtrager/osxcross
           cd osxcross
@@ -136,7 +88,6 @@ jobs:
 
       - name: Configure Rust toolchain
         run: |
-          # Configure toolchain
           cd $HOME
           chmod -R 777 osxcross
           chmod -R +x osxcross/target/bin
@@ -155,12 +106,11 @@ jobs:
           echo 'rustflags = ["-Ctarget-cpu=x86-64-v2", "-Ctarget-feature=+crt-static"]' >> .cargo/config
           echo '[target.x86_64-unknown-linux-musl]' >> .cargo/config
           echo 'rustflags = ["-Ctarget-cpu=x86-64-v2", "-Ctarget-feature=+crt-static"]' >> .cargo/config
-          ls osxcross/target/bin
 
       - name: Set up Rust toolchain
-        uses: Systemcluster/actions@setup-rust-v0
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          channel: ${{ matrix.toolchain }}
+          toolchain: ${{ matrix.toolchain }}
           targets: ${{ env.WRAPPE_TARGETS }}
           cache-key-job: true
           components: llvm-tools
@@ -189,7 +139,6 @@ jobs:
 
       - name: Collect executables
         run: |
-          # Collect executables
           mv target/x86_64-pc-windows-gnu/release/wrappe.exe wrappe.exe
           mv target/x86_64-unknown-linux-musl/release/wrappe wrappe-linux
           mv target/x86_64-apple-darwin/release/wrappe wrappe-macos-x86
@@ -202,11 +151,14 @@ jobs:
           aarch64-apple-darwin22.4-lipo -create -output wrappe-macos wrappe-macos-arm wrappe-macos-x86
 
       - name: Upload release
-        uses: Systemcluster/actions@release-github-v0
+        uses: softprops/action-gh-release@v2
         with:
-          tag: ${{ needs.publish.outputs.tag || github.ref_name }}
-          name: ${{ needs.publish.outputs.version }}
+          tag: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
           files: |
             wrappe.exe
             wrappe-linux
             wrappe-macos
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
