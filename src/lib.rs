@@ -1,7 +1,6 @@
 use std::{
-    path::{Path, PathBuf},
-    sync::mpsc,
-    time::{Duration, SystemTime},
+    path::PathBuf,
+    time::SystemTime,
 };
 
 mod types;
@@ -11,7 +10,7 @@ mod compress;
 use compress::compress;
 
 mod args;
-pub use args::{get_available_runners, list_runners};
+pub use args::{get_available_runners, get_version_from_file, list_runners};
 
 /// Configuration for a packing operation.
 #[derive(Debug, Clone)]
@@ -125,9 +124,7 @@ pub fn pack(
     use std::fs::File;
     use std::io::{BufWriter, Cursor, Write};
 
-    use console::{style, Emoji};
     use editpe::Image;
-    use indicatif::{ProgressBar, ProgressStyle};
     use jwalk::WalkDir;
     use zstd::stream::copy_decode;
 
