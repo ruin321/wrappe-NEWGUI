@@ -365,7 +365,7 @@ impl WrappeApp {
                     egui::Color32::from_rgb(248, 248, 250)
                 })
                 .stroke(egui::Stroke::new(
-                    1.5,
+                    1.5_f32,
                     if self.dark_mode {
                         egui::Color32::from_rgb(60, 60, 70)
                     } else {
@@ -373,7 +373,7 @@ impl WrappeApp {
                     },
                 ))
                 .rounding(egui::Rounding::same(12.0))
-                .inner_margin(egui::Margin::symmetric(32, 28));
+                .inner_margin(egui::Margin::symmetric(32.0, 28.0));
 
             card.show(ui, |ui| {
                 ui.set_width(520.0);
@@ -573,7 +573,7 @@ impl WrappeApp {
                 ui.end_row();
 
                 ui.label("Runner:");
-                egui::ComboBox::from_id_source("runner_combo")
+                egui::ComboBox::from_id_salt("runner_combo")
                     .selected_text(&self.runner)
                     .show_ui(ui, |ui| {
                         for (i, r) in self.available_runners.iter().enumerate() {
@@ -727,7 +727,7 @@ impl WrappeApp {
                     egui::Color32::from_rgb(245, 245, 248)
                 })
                 .rounding(egui::Rounding::same(8.0))
-                .inner_margin(egui::Margin::symmetric(24, 16))
+                .inner_margin(egui::Margin::symmetric(24.0, 16.0))
                 .show(ui, |ui| {
                     ui.set_width(500.0);
                     ui.label(egui::RichText::new("Quick Guide").size(16.0).strong());
