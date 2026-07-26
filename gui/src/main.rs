@@ -5,7 +5,6 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([900.0, 750.0])
             .with_min_inner_size([650.0, 550.0])
-            .with_decorations(false)
             .with_title("wrappe GUI"),
         ..Default::default()
     };

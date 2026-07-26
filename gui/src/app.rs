@@ -159,7 +159,6 @@ pub struct WrappeApp {
     // UI state
     selected_tab: Tab,
     dark_mode: bool,
-    drag_offset: Option<egui::Pos2>,
 }
 
 impl Default for WrappeApp {
@@ -208,7 +207,6 @@ impl Default for WrappeApp {
             progress_receiver: None,
             selected_tab: Tab::Simple,
             dark_mode: true,
-            drag_offset: None,
         }
     }
 }
@@ -245,111 +243,33 @@ impl eframe::App for WrappeApp {
             self.progress_receiver = None;
         }
 
-        // Custom title bar
-        let title_bar_height = 36.0;
-        egui::TopBottomPanel::top("custom_title_bar")
-            .exact_height(title_bar_height)
-            .show(ctx, |ui| {
-                let bg = if self.dark_mode {
-                    egui::Color32::from_rgb(25, 25, 30)
-                } else {
-                    egui::Color32::from_rgb(230, 230, 235)
-                };
-                ui.painter().rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, bg);
-
-                // Drag detection
-                let resp = ui.interact(
-                    ui.max_rect(),
-                    ui.next_auto_id(),
-                    egui::Sense::click_and_drag(),
+        // Title bar
+        egui::TopBottomPanel::top("title_bar").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.heading("wrappe GUI");
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new("pack your app into one file")
+                        .size(11.0)
+                        .weak(),
                 );
-                if resp.drag_started() {
-                    self.drag_offset = resp.hover_pos();
-                }
-                if resp.dragged() {
-                    if let Some(start) = self.drag_offset {
-                        let delta = resp.hover_pos().unwrap() - start;
-                        if let Some(pos) = ctx.input(|i| i.viewport().inner_rect) {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(
-                                egui::Pos2::new(pos.min.x + delta.x, pos.min.y + delta.y),
-                            ));
-                        }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Theme toggle
+                    if ui
+                        .button(if self.dark_mode { "\u{2600}" } else { "\u{1F319}" })
+                        .clicked()
+                    {
+                        self.dark_mode = !self.dark_mode;
+                        ctx.set_visuals(if self.dark_mode {
+                            egui::Visuals::dark()
+                        } else {
+                            egui::Visuals::light()
+                        });
                     }
-                }
-                if resp.drag_stopped() {
-                    self.drag_offset = None;
-                }
-
-                ui.horizontal(|ui| {
-                    ui.add_space(12.0);
-                    let text_color = if self.dark_mode {
-                        egui::Color32::from_rgb(200, 200, 210)
-                    } else {
-                        egui::Color32::from_rgb(40, 40, 50)
-                    };
-                    ui.label(
-                        egui::RichText::new("wrappe GUI")
-                            .size(14.0)
-                            .color(text_color),
-                    );
-                    ui.add_space(8.0);
-                    ui.label(
-                        egui::RichText::new("pack your app into one file")
-                            .size(11.0)
-                            .color(if self.dark_mode {
-                                egui::Color32::from_rgb(120, 120, 130)
-                            } else {
-                                egui::Color32::from_rgb(140, 140, 150)
-                            }),
-                    );
-
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        // Close button
-                        let close_btn = egui::Button::new(
-                            egui::RichText::new("\u{2715}").size(14.0),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .min_size(egui::vec2(46.0, title_bar_height));
-                        if ui.add(close_btn).clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-
-                        // Minimize button
-                        let min_btn = egui::Button::new(
-                            egui::RichText::new("\u{2500}").size(14.0),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .min_size(egui::vec2(46.0, title_bar_height));
-                        if ui.add(min_btn).clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-                        }
-
-                        // Theme toggle
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    egui::RichText::new(if self.dark_mode {
-                                        "\u{2600}"
-                                    } else {
-                                        "\u{1F319}"
-                                    })
-                                    .size(14.0),
-                                )
-                                .fill(egui::Color32::TRANSPARENT)
-                                .min_size(egui::vec2(40.0, title_bar_height)),
-                            )
-                            .clicked()
-                        {
-                            self.dark_mode = !self.dark_mode;
-                            ctx.set_visuals(if self.dark_mode {
-                                egui::Visuals::dark()
-                            } else {
-                                egui::Visuals::light()
-                            });
-                        }
-                    });
                 });
             });
+        });
 
         // Bottom panel - progress and results
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
