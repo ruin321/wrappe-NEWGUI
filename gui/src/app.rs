@@ -9,6 +9,7 @@ enum Tab {
     Simple,
     Basic,
     Advanced,
+    About,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -255,11 +256,7 @@ impl eframe::App for WrappeApp {
                 );
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    // Theme toggle
-                    if ui
-                        .button(if self.dark_mode { "\u{2600}" } else { "\u{1F319}" })
-                        .clicked()
-                    {
+                    if ui.button(if self.dark_mode { "\u{2600}" } else { "\u{1F319}" }).clicked() {
                         self.dark_mode = !self.dark_mode;
                         ctx.set_visuals(if self.dark_mode {
                             egui::Visuals::dark()
@@ -287,6 +284,12 @@ impl eframe::App for WrappeApp {
                 } else {
                     ui.colored_label(egui::Color32::GREEN, msg);
                 }
+                // Open output folder button after success
+                if !self.result_error && !self.output_folder.is_empty() {
+                    if ui.button("Open Folder").clicked() {
+                        let _ = open::that(&self.output_folder);
+                    }
+                }
                 if ui.button("Clear").clicked() {
                     self.result_message = None;
                     self.result_error = false;
@@ -296,11 +299,13 @@ impl eframe::App for WrappeApp {
 
         // Central panel
         egui::CentralPanel::default().show(ctx, |ui| {
-            // Tab bar
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.selected_tab, Tab::Simple, "Simple");
                 ui.selectable_value(&mut self.selected_tab, Tab::Basic, "Basic");
                 ui.selectable_value(&mut self.selected_tab, Tab::Advanced, "Advanced");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.selectable_value(&mut self.selected_tab, Tab::About, "About");
+                });
             });
             ui.separator();
 
@@ -308,11 +313,11 @@ impl eframe::App for WrappeApp {
                 Tab::Simple => self.show_simple_tab(ui),
                 Tab::Basic => self.show_basic_tab(ui),
                 Tab::Advanced => self.show_advanced_tab(ui),
+                Tab::About => self.show_about_tab(ui),
             }
 
             ui.separator();
 
-            // Pack button (hidden in Simple mode which has its own GO button)
             if self.selected_tab != Tab::Simple {
                 ui.add_enabled_ui(!self.packing && !self.input_path.is_empty(), |ui| {
                     let pack_btn = egui::Button::new(
@@ -345,12 +350,7 @@ impl WrappeApp {
         ui.vertical_centered(|ui| {
             ui.add_space(20.0);
 
-            // Title
-            ui.label(
-                egui::RichText::new("Super Simple Mode")
-                    .size(28.0)
-                    .strong(),
-            );
+            ui.label(egui::RichText::new("Super Simple Mode").size(28.0).strong());
             ui.add_space(4.0);
             ui.label(
                 egui::RichText::new("Just pick a folder, choose the main exe, save it. Done.")
@@ -358,29 +358,28 @@ impl WrappeApp {
             );
             ui.add_space(24.0);
 
-            // Card
-            let card = egui::Frame::new()
+            let card = egui::Frame::none()
                 .fill(if self.dark_mode {
                     egui::Color32::from_rgb(35, 35, 42)
                 } else {
                     egui::Color32::from_rgb(248, 248, 250)
                 })
                 .stroke(egui::Stroke::new(
-                    1.5_f32,
+                    1.5,
                     if self.dark_mode {
                         egui::Color32::from_rgb(60, 60, 70)
                     } else {
                         egui::Color32::from_rgb(200, 200, 210)
                     },
                 ))
-                .corner_radius(12)
+                .rounding(egui::Rounding::same(12.0))
                 .inner_margin(egui::Margin::symmetric(32, 28));
 
             card.show(ui, |ui| {
                 ui.set_width(520.0);
 
                 // Input folder
-                self.field_label(ui, "\u{1F4C1}  Input Folder");
+                ui.label(egui::RichText::new("\u{1F4C1}  Input Folder").size(14.0).strong());
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.add(
@@ -402,8 +401,8 @@ impl WrappeApp {
                 });
                 ui.add_space(18.0);
 
-                // Main executable (NEW)
-                self.field_label(ui, "\u{1F4BE}  Main Executable");
+                // Main executable
+                ui.label(egui::RichText::new("\u{1F4BE}  Main Executable").size(14.0).strong());
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.add(
@@ -426,7 +425,7 @@ impl WrappeApp {
                 ui.add_space(18.0);
 
                 // Output folder
-                self.field_label(ui, "\u{1F4C2}  Output Folder");
+                ui.label(egui::RichText::new("\u{1F4C2}  Output Folder").size(14.0).strong());
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.add(
@@ -443,7 +442,7 @@ impl WrappeApp {
                 ui.add_space(18.0);
 
                 // Output filename
-                self.field_label(ui, "\u{1F4DD}  Output Filename");
+                ui.label(egui::RichText::new("\u{1F4DD}  Output Filename").size(14.0).strong());
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.add(
@@ -454,7 +453,6 @@ impl WrappeApp {
                     ui.label(".exe");
                 });
 
-                // Preview
                 if !self.output_folder.is_empty() && !self.output_name.is_empty() {
                     ui.add_space(10.0);
                     let preview = format!(
@@ -463,29 +461,36 @@ impl WrappeApp {
                         self.output_name.trim(),
                     );
                     ui.label(
-                        egui::RichText::new(format!("Saved to: {}", preview))
-                            .size(12.0),
+                        egui::RichText::new(format!("Saved to: {}", preview)).size(12.0),
                     );
                     self.output_path = preview;
                 }
             });
 
-            ui.add_space(24.0);
+            ui.add_space(16.0);
 
-            // Big GO button
+            // Compression presets
+            ui.horizontal(|ui| {
+                ui.label("Compression:");
+                ui.selectable_value(&mut self.compression, 3, "Fast");
+                ui.selectable_value(&mut self.compression, 8, "Balanced");
+                ui.selectable_value(&mut self.compression, 16, "Small");
+                ui.selectable_value(&mut self.compression, 22, "Tiny");
+            });
+
+            ui.add_space(16.0);
+
             let ready = !self.input_path.is_empty()
                 && !self.output_folder.is_empty()
                 && !self.output_name.is_empty();
 
             ui.add_enabled_ui(!self.packing && ready, |ui| {
                 let btn = egui::Button::new(
-                    egui::RichText::new("GO!")
-                        .size(42.0)
-                        .color(egui::Color32::WHITE),
+                    egui::RichText::new("GO!").size(42.0).color(egui::Color32::WHITE),
                 )
                 .fill(egui::Color32::from_rgb(46, 204, 113))
                 .min_size(egui::vec2(320.0, 85.0))
-                .corner_radius(16);
+                .rounding(egui::Rounding::same(16.0));
 
                 if ui.add(btn).clicked() {
                     self.command_path = self.main_exe.clone();
@@ -511,19 +516,10 @@ impl WrappeApp {
             if !ready && !self.packing {
                 ui.add_space(8.0);
                 ui.label(
-                    egui::RichText::new("Fill in all fields above to start")
-                        .size(13.0),
+                    egui::RichText::new("Fill in all fields above to start").size(13.0),
                 );
             }
         });
-    }
-
-    fn field_label(&self, ui: &mut egui::Ui, text: &str) {
-        ui.label(
-            egui::RichText::new(text)
-                .size(14.0)
-                .strong(),
-        );
     }
 
     fn show_basic_tab(&mut self, ui: &mut egui::Ui) {
@@ -548,7 +544,7 @@ impl WrappeApp {
                 ui.label("Command:");
                 ui.add(
                     egui::TextEdit::singleline(&mut self.command_path)
-                        .hint_text("Executable relative to input (for directories)...")
+                        .hint_text("Executable relative to input...")
                         .desired_width(400.0),
                 );
                 if ui.button("Browse...").clicked() {
@@ -577,7 +573,7 @@ impl WrappeApp {
                 ui.end_row();
 
                 ui.label("Runner:");
-                egui::ComboBox::from_id_salt("runner_combo")
+                egui::ComboBox::from_id_source("runner_combo")
                     .selected_text(&self.runner)
                     .show_ui(ui, |ui| {
                         for (i, r) in self.available_runners.iter().enumerate() {
@@ -607,11 +603,7 @@ impl WrappeApp {
 
                     ui.label("Versioning:");
                     ui.horizontal(|ui| {
-                        ui.selectable_value(
-                            &mut self.versioning,
-                            Versioning::SideBySide,
-                            "Side-by-side",
-                        );
+                        ui.selectable_value(&mut self.versioning, Versioning::SideBySide, "Side-by-side");
                         ui.selectable_value(&mut self.versioning, Versioning::Replace, "Replace");
                         ui.selectable_value(&mut self.versioning, Versioning::None, "None");
                     });
@@ -619,16 +611,8 @@ impl WrappeApp {
 
                     ui.label("Verification:");
                     ui.horizontal(|ui| {
-                        ui.selectable_value(
-                            &mut self.verification,
-                            Verification::Existence,
-                            "Existence",
-                        );
-                        ui.selectable_value(
-                            &mut self.verification,
-                            Verification::Checksum,
-                            "Checksum",
-                        );
+                        ui.selectable_value(&mut self.verification, Verification::Existence, "Existence");
+                        ui.selectable_value(&mut self.verification, Verification::Checksum, "Checksum");
                         ui.selectable_value(&mut self.verification, Verification::None, "None");
                     });
                     ui.end_row();
@@ -636,7 +620,7 @@ impl WrappeApp {
                     ui.label("Version String:");
                     ui.add(
                         egui::TextEdit::singleline(&mut self.version_string)
-                            .hint_text("Custom version (max 16 chars, optional)...")
+                            .hint_text("Custom version (max 16 chars)...")
                             .desired_width(300.0),
                     );
                     ui.end_row();
@@ -644,11 +628,7 @@ impl WrappeApp {
                     ui.label("Show Info:");
                     ui.horizontal(|ui| {
                         ui.selectable_value(&mut self.show_information, ShowInfo::Title, "Title");
-                        ui.selectable_value(
-                            &mut self.show_information,
-                            ShowInfo::Verbose,
-                            "Verbose",
-                        );
+                        ui.selectable_value(&mut self.show_information, ShowInfo::Verbose, "Verbose");
                         ui.selectable_value(&mut self.show_information, ShowInfo::None, "None");
                     });
                     ui.end_row();
@@ -667,11 +647,7 @@ impl WrappeApp {
                         ui.selectable_value(&mut self.current_dir, CurrentDir::Inherit, "Inherit");
                         ui.selectable_value(&mut self.current_dir, CurrentDir::Unpack, "Unpack");
                         ui.selectable_value(&mut self.current_dir, CurrentDir::Runner, "Runner");
-                        ui.selectable_value(
-                            &mut self.current_dir,
-                            CurrentDir::Command,
-                            "Command",
-                        );
+                        ui.selectable_value(&mut self.current_dir, CurrentDir::Command, "Command");
                     });
                     ui.end_row();
 
@@ -714,6 +690,58 @@ impl WrappeApp {
                         ui.checkbox(&mut self.build_dictionary, "Build compression dictionary");
                     });
                     ui.end_row();
+                });
+        });
+    }
+
+    fn show_about_tab(&mut self, ui: &mut egui::Ui) {
+        ui.vertical_centered(|ui| {
+            ui.add_space(40.0);
+            ui.label(egui::RichText::new("wrappe GUI").size(32.0).strong());
+            ui.add_space(8.0);
+            ui.label(
+                egui::RichText::new("Pack executables into self-contained single binaries")
+                    .size(14.0),
+            );
+            ui.add_space(20.0);
+
+            ui.label(format!("Version: {}", env!("CARGO_PKG_VERSION")));
+            ui.add_space(8.0);
+            ui.label("Built with Rust + egui + zstd");
+            ui.add_space(8.0);
+            ui.hyperlink_to(
+                "GitHub: ruin321/wrappe-NEWGUI",
+                "https://github.com/ruin321/wrappe-NEWGUI",
+            );
+            ui.add_space(4.0);
+            ui.label(
+                egui::RichText::new("Original project by Systemcluster").size(11.0).weak(),
+            );
+
+            ui.add_space(40.0);
+
+            egui::Frame::none()
+                .fill(if self.dark_mode {
+                    egui::Color32::from_rgb(35, 35, 42)
+                } else {
+                    egui::Color32::from_rgb(245, 245, 248)
+                })
+                .rounding(egui::Rounding::same(8.0))
+                .inner_margin(egui::Margin::symmetric(24, 16))
+                .show(ui, |ui| {
+                    ui.set_width(500.0);
+                    ui.label(egui::RichText::new("Quick Guide").size(16.0).strong());
+                    ui.add_space(8.0);
+                    ui.label("1. Select your app folder (Simple tab)");
+                    ui.label("2. Pick the main .exe file inside it");
+                    ui.label("3. Choose where to save the packed file");
+                    ui.label("4. Hit GO!");
+                    ui.add_space(4.0);
+                    ui.label(
+                        egui::RichText::new("For more options, use Basic or Advanced tabs.")
+                            .size(12.0)
+                            .weak(),
+                    );
                 });
         });
     }
