@@ -333,11 +333,11 @@ impl WrappeApp {
             ui.add_space(30.0);
 
             // Clean card-style layout
-            let card = egui::Frame::none()
+            let card = egui::Frame::new()
                 .fill(egui::Color32::from_rgb(248, 248, 248))
-                .stroke(egui::Stroke::new(1.5, egui::Color32::from_rgb(200, 200, 200)))
-                .rounding(egui::Rounding::same(10.0))
-                .inner_margin(egui::Margin::symmetric(30.0, 24.0));
+                .stroke(egui::Stroke::new(1.5_f32, egui::Color32::from_rgb(200, 200, 200)))
+                .corner_radius(10)
+                .inner_margin(egui::Margin::symmetric(30, 24));
 
             card.show(ui, |ui| {
                 ui.set_width(500.0);
@@ -431,7 +431,7 @@ impl WrappeApp {
                 )
                 .fill(egui::Color32::from_rgb(0, 180, 60))
                 .min_size(egui::vec2(300.0, 80.0))
-                .rounding(egui::Rounding::same(16.0));
+                .corner_radius(16);
 
                 if ui.add(btn).clicked() {
                     // Simple mode: use all defaults for advanced options
