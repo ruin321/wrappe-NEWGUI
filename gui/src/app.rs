@@ -159,7 +159,6 @@ pub struct WrappeApp {
     // UI state
     selected_tab: Tab,
     dark_mode: bool,
-    dragging: bool,
     drag_offset: Option<egui::Pos2>,
 }
 
@@ -209,7 +208,6 @@ impl Default for WrappeApp {
             progress_receiver: None,
             selected_tab: Tab::Simple,
             dark_mode: true,
-            dragging: false,
             drag_offset: None,
         }
     }
