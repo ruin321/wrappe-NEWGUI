@@ -306,6 +306,9 @@ mod tr {
     pub struct BuildDict;
     impl BuildDict { pub const EN: &str = "Build compression dictionary"; pub const ZH: &str = "构建压缩字典"; pub const JA: &str = "圧縮辞書を構築"; pub const KO: &str = "압축 사전 빌드"; pub const RU: &str = "Построить словарь сжатия"; }
 }
+}
+
+pub struct WrappeApp {
     // Input/Output paths
     input_path: String,
     main_exe: String,
