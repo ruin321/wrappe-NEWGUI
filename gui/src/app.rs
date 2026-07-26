@@ -39,7 +39,7 @@ impl Lang {
 }
 
 // Simple translation function
-fn tr(lang: &Lang, en: &str, zh: &str, ja: &str, ko: &str, ru: &str) -> &str {
+fn tr<'a>(lang: &Lang, en: &'a str, zh: &'a str, ja: &'a str, ko: &'a str, ru: &'a str) -> &'a str {
     match lang { Lang::En => en, Lang::Zh => zh, Lang::Ja => ja, Lang::Ko => ko, Lang::Ru => ru }
 }
 
