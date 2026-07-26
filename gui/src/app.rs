@@ -257,7 +257,7 @@ impl eframe::App for WrappeApp {
                 } else {
                     egui::Color32::from_rgb(230, 230, 235)
                 };
-                ui.painter().rect_filled(ui.max_rect(), egui::Rounding::ZERO, bg);
+                ui.painter().rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, bg);
 
                 // Drag detection
                 let resp = ui.interact(
@@ -271,15 +271,14 @@ impl eframe::App for WrappeApp {
                 if resp.dragged() {
                     if let Some(start) = self.drag_offset {
                         let delta = resp.hover_pos().unwrap() - start;
-                        ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(
-                            egui::Pos2::new(
-                                ctx.input(|i| i.viewport().outer_position.unwrap_or_default().x + delta.x),
-                                ctx.input(|i| i.viewport().outer_position.unwrap_or_default().y + delta.y),
-                            ),
-                        ));
+                        if let Some(pos) = ctx.input(|i| i.viewport().inner_rect) {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(
+                                egui::Pos2::new(pos.min.x + delta.x, pos.min.y + delta.y),
+                            ));
+                        }
                     }
                 }
-                if resp.drag_released() {
+                if resp.drag_stopped() {
                     self.drag_offset = None;
                 }
 
