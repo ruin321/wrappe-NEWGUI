@@ -216,7 +216,7 @@ pub fn get_unpack_directory(
         return Err("unpack directory name is longer than 127 characters".to_string());
     }
     let mut _directory = [0; NAME_SIZE];
-    _directory[0..directory.len()].copy_from_slice(directory);
+    _directory[0..directory.len()].copy_from_slice(&directory);
     Ok(_directory)
 }
 
