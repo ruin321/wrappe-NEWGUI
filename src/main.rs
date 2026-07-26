@@ -274,8 +274,11 @@ fn main() {
                     println!("      {}{}", Emoji("💾 ", ""), style(&progress.message).dim());
                 }
             }
+            wrappe::PackStage::Cancelled => {
+                println!("      {} {}", Emoji("🛑 ", ""), style("cancelled").yellow());
+            }
         }
-    }) {
+    }, std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))) {
         Ok(_result) => {}
         Err(e) => {
             eprintln!("{}: {}", style("error").red(), e);

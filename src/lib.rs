@@ -114,14 +114,17 @@ pub enum PackStage {
     Compressing,
     Finalizing,
     Done,
+    Cancelled,
 }
 
 /// Run the full packing process.
 ///
 /// Progress updates are sent through the `progress` callback.
+/// Pass a `cancelled` AtomicBool to allow cancellation.
 pub fn pack(
     config: PackConfig,
     progress: impl Fn(PackProgress) + Send + Sync + 'static,
+    cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) -> Result<PackResult, PackError> {
     use std::fs::File;
     use std::io::{BufWriter, Cursor, Write};
@@ -340,6 +343,7 @@ pub fn pack(
                 is_error: false,
             });
         },
+        &cancelled,
     );
 
     writer.flush()?;

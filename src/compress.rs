@@ -96,6 +96,7 @@ pub fn compress<
     source: T, target: &mut W, exclude: X, exclude_patterns: &[glob::Pattern],
     compression: u32, build_dict: bool,
     progress_callback: P, error_callback: E, step_callback: S, info_callback: I,
+    cancelled: &std::sync::atomic::AtomicBool,
 ) -> (u64, u64, u64) {
     let source: &Path = source.as_ref();
     let exclude: &Path = exclude.as_ref();
@@ -444,6 +445,9 @@ pub fn compress<
             }
 
             progress_callback();
+            if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                return None;
+            }
             Some(())
         })
         .count();
@@ -593,6 +597,9 @@ pub fn compress<
             }
 
             progress_callback();
+            if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                return None;
+            }
             Some(())
         })
         .count();
