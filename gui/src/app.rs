@@ -122,6 +122,8 @@ pub struct WrappeApp {
     input_path: String,
     command_path: String,
     output_path: String,
+    output_folder: String,
+    output_name: String,
 
     // Options
     compression: u32,
@@ -168,6 +170,8 @@ impl Default for WrappeApp {
             input_path: String::new(),
             command_path: String::new(),
             output_path: String::new(),
+            output_folder: String::new(),
+            output_name: String::new(),
             compression: 8,
             runner: if runners.is_empty() {
                 String::new()
@@ -314,131 +318,147 @@ impl eframe::App for WrappeApp {
 impl WrappeApp {
     fn show_simple_tab(&mut self, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| {
-            ui.add_space(40.0);
+            ui.add_space(30.0);
             ui.heading(
-                egui::RichText::new("Drop your app here")
-                    .size(28.0)
-                    .color(egui::Color32::from_rgb(100, 100, 100)),
+                egui::RichText::new("Super Simple Mode")
+                    .size(26.0)
+                    .color(egui::Color32::from_rgb(80, 80, 80)),
             );
-            ui.add_space(8.0);
+            ui.add_space(4.0);
             ui.label(
-                egui::RichText::new("One click, one file. That's it.")
-                    .size(14.0)
+                egui::RichText::new("Pick a folder, pick where to save, name it. Done.")
+                    .size(13.0)
                     .color(egui::Color32::from_rgb(150, 150, 150)),
             );
             ui.add_space(30.0);
 
-            // Big drop zone / select area
-            let drop_zone = egui::Frame::none()
-                .fill(egui::Color32::from_rgb(245, 245, 245))
-                .stroke(egui::Stroke::new(2.0, egui::Color32::from_rgb(180, 180, 180)))
-                .rounding(egui::Rounding::same(12.0))
-                .inner_margin(egui::Margin::same(40.0));
+            // Clean card-style layout
+            let card = egui::Frame::none()
+                .fill(egui::Color32::from_rgb(248, 248, 248))
+                .stroke(egui::Stroke::new(1.5, egui::Color32::from_rgb(200, 200, 200)))
+                .rounding(egui::Rounding::same(10.0))
+                .inner_margin(egui::Margin::symmetric(30.0, 24.0));
 
-            drop_zone.show(ui, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.add_space(20.0);
-                    ui.label(
-                        egui::RichText::new("\u{1F4E6}")
-                            .size(64.0),
+            card.show(ui, |ui| {
+                ui.set_width(500.0);
+
+                // Input folder
+                ui.label(egui::RichText::new("Input Folder").size(15.0).strong());
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.input_path)
+                            .hint_text("Select the folder to pack...")
+                            .desired_width(380.0),
                     );
-                    ui.add_space(12.0);
-
-                    if self.input_path.is_empty() {
-                        ui.label(
-                            egui::RichText::new("Select a folder or executable")
-                                .size(16.0)
-                                .color(egui::Color32::from_rgb(80, 80, 80)),
-                        );
-                    } else {
-                        let display = if self.input_path.len() > 60 {
-                            format!("...{}", &self.input_path[self.input_path.len().saturating_sub(57)..])
-                        } else {
-                            self.input_path.clone()
-                        };
-                        ui.label(
-                            egui::RichText::new(format!("\u{2705} {}", display))
-                                .size(16.0)
-                                .color(egui::Color32::from_rgb(0, 130, 0)),
-                        );
+                    if ui.button("Browse").clicked() {
+                        if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                            self.input_path = path.display().to_string();
+                            if self.output_name.is_empty() {
+                                self.output_name = path
+                                    .file_name()
+                                    .map(|n| n.to_string_lossy().to_string())
+                                    .unwrap_or_default();
+                            }
+                        }
                     }
-
-                    ui.add_space(16.0);
-
-                    ui.horizontal(|ui| {
-                        if ui.button(
-                            egui::RichText::new("  Pick Folder  ").size(18.0)
-                        ).clicked() {
-                            if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                                self.input_path = path.display().to_string();
-                                // Auto-fill output
-                                if self.output_path.is_empty() {
-                                    let name = path.file_name()
-                                        .map(|n| n.to_string_lossy().to_string())
-                                        .unwrap_or_else(|| "packed".to_string());
-                                    self.output_path = format!("{}-packed.exe", name);
-                                }
-                            }
-                        }
-
-                        ui.add_space(10.0);
-
-                        if ui.button(
-                            egui::RichText::new("  Pick File  ").size(18.0)
-                        ).clicked() {
-                            if let Some(path) = rfd::FileDialog::new().pick_file() {
-                                self.input_path = path.display().to_string();
-                                if self.output_path.is_empty() {
-                                    let name = path.file_stem()
-                                        .map(|n| n.to_string_lossy().to_string())
-                                        .unwrap_or_else(|| "packed".to_string());
-                                    self.output_path = format!("{}-packed.exe", name);
-                                }
-                            }
-                        }
-                    });
-
-                    ui.add_space(20.0);
                 });
+                ui.add_space(16.0);
+
+                // Output folder
+                ui.label(egui::RichText::new("Output Folder").size(15.0).strong());
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.output_folder)
+                            .hint_text("Where to save the packed file...")
+                            .desired_width(380.0),
+                    );
+                    if ui.button("Browse").clicked() {
+                        if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                            self.output_folder = path.display().to_string();
+                        }
+                    }
+                });
+                ui.add_space(16.0);
+
+                // Output filename
+                ui.label(egui::RichText::new("Output Filename").size(15.0).strong());
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.output_name)
+                            .hint_text("e.g. MyApp")
+                            .desired_width(280.0),
+                    );
+                    ui.label(
+                        egui::RichText::new(".exe")
+                            .size(15.0)
+                            .color(egui::Color32::from_rgb(120, 120, 120)),
+                    );
+                });
+
+                // Build full output path preview
+                if !self.output_folder.is_empty() && !self.output_name.is_empty() {
+                    ui.add_space(8.0);
+                    let preview = format!(
+                        "{}/{}.exe",
+                        self.output_folder.trim_end_matches('/').trim_end_matches('\\'),
+                        self.output_name.trim(),
+                    );
+                    ui.label(
+                        egui::RichText::new(format!("Will save to: {}", preview))
+                            .size(12.0)
+                            .color(egui::Color32::from_rgb(100, 100, 100)),
+                    );
+                    // Set output_path for build_config
+                    self.output_path = preview;
+                }
             });
 
-            ui.add_space(24.0);
+            ui.add_space(28.0);
 
-            // Quick compression hint
-            ui.horizontal(|ui| {
-                ui.label("Compression:");
-                ui.selectable_value(&mut self.compression, 3, "Fast");
-                ui.selectable_value(&mut self.compression, 8, "Balanced");
-                ui.selectable_value(&mut self.compression, 16, "Small");
-                ui.selectable_value(&mut self.compression, 22, "Tiny");
-            });
+            // Big GO button
+            let ready = !self.input_path.is_empty()
+                && !self.output_folder.is_empty()
+                && !self.output_name.is_empty();
 
-            ui.add_space(20.0);
-
-            // Big pack button
-            ui.add_enabled_ui(!self.packing && !self.input_path.is_empty(), |ui| {
+            ui.add_enabled_ui(!self.packing && ready, |ui| {
                 let btn = egui::Button::new(
-                    egui::RichText::new(if self.packing { "Packing..." } else { "GO!" })
-                        .size(36.0)
+                    egui::RichText::new("GO!")
+                        .size(40.0)
                         .color(egui::Color32::WHITE),
                 )
-                .fill(if self.input_path.is_empty() {
-                    egui::Color32::from_rgb(180, 180, 180)
-                } else {
-                    egui::Color32::from_rgb(0, 180, 60)
-                })
-                .min_size(egui::vec2(260.0, 70.0))
+                .fill(egui::Color32::from_rgb(0, 180, 60))
+                .min_size(egui::vec2(300.0, 80.0))
                 .rounding(egui::Rounding::same(16.0));
 
                 if ui.add(btn).clicked() {
+                    // Simple mode: use all defaults for advanced options
+                    self.command_path.clear();
+                    self.runner_index = 0;
+                    self.runner = self.available_runners.first().cloned().unwrap_or_default();
+                    self.compression = 8;
+                    self.unpack_target = UnpackTarget::Temp;
+                    self.versioning = Versioning::SideBySide;
+                    self.verification = Verification::Existence;
+                    self.console = ConsoleMode::Auto;
+                    self.current_dir = CurrentDir::Inherit;
+                    self.cleanup = false;
+                    self.once = false;
+                    self.build_dictionary = false;
+                    self.version_string.clear();
+                    self.env_vars.clear();
+                    self.icon_path.clear();
+                    self.exclude_patterns.clear();
                     self.start_packing();
                 }
             });
 
-            if self.input_path.is_empty() {
+            if !ready && !self.packing {
                 ui.add_space(8.0);
                 ui.label(
-                    egui::RichText::new("Select a folder or file first")
+                    egui::RichText::new("Fill in all three fields above to start")
                         .size(13.0)
                         .color(egui::Color32::from_rgb(180, 180, 180)),
                 );
