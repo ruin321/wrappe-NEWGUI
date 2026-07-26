@@ -208,11 +208,9 @@ pub fn get_unpack_directory(
         source
             .file_name()
             .ok_or_else(|| "couldn't infer unpack directory name from the input directory".to_string())?
-            .to_str()
-            .ok_or_else(|| {
-                "couldn't infer unpack directory name, not valid utf8".to_string()
-            })?
+            .to_string_lossy()
             .as_bytes()
+            .to_vec()
     };
     if directory.len() >= NAME_SIZE {
         return Err("unpack directory name is longer than 127 characters".to_string());
@@ -260,9 +258,9 @@ pub fn get_command_path(command: Option<&Path>, source: &Path) -> Result<PathBuf
 
 pub fn get_command(command_path: &Path) -> Result<[u8; NAME_SIZE], String> {
     let command = command_path
-        .to_str()
-        .ok_or_else(|| "command path is not valid utf8".to_string())?
-        .as_bytes();
+        .to_string_lossy()
+        .as_bytes()
+        .to_vec();
     if command.len() >= NAME_SIZE {
         return Err("command path is longer than 127 characters".to_string());
     }

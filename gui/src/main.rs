@@ -3,9 +3,10 @@ mod app;
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([850.0, 720.0])
-            .with_min_inner_size([600.0, 500.0])
-            .with_title("wrappe GUI - Pack executables into self-contained binaries"),
+            .with_inner_size([900.0, 750.0])
+            .with_min_inner_size([650.0, 550.0])
+            .with_decorations(false)
+            .with_title("wrappe GUI"),
         ..Default::default()
     };
 
@@ -13,7 +14,6 @@ fn main() -> eframe::Result {
         "wrappe GUI",
         options,
         Box::new(|cc| {
-            // Start with dark mode
             cc.egui_ctx.set_visuals(egui::Visuals::dark());
             Ok(Box::new(app::WrappeApp::default()))
         }),

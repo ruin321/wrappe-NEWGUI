@@ -211,7 +211,7 @@ pub fn compress<
 
             step_callback(&entry.display().to_string());
 
-            let name = entry.file_name()?.to_str()?;
+            let name = entry.file_name()?.to_string_lossy();
 
             parents.push(entry.to_slash()?.into_owned());
 
@@ -284,7 +284,7 @@ pub fn compress<
                 }
             };
 
-            let name = entry.file_name()?.to_str()?;
+            let name = entry.file_name()?.to_string_lossy();
 
             let file = File::open(&entry);
             if let Err(e) = file {
@@ -488,7 +488,7 @@ pub fn compress<
             };
 
             let meta = symlink_metadata(&entry);
-            let name = entry.file_name()?.to_str()?;
+            let name = entry.file_name()?.to_string_lossy();
 
             let link = read_link(&entry);
             if let Err(ref e) = link {

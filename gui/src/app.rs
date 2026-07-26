@@ -120,6 +120,7 @@ impl CurrentDir {
 pub struct WrappeApp {
     // Input/Output paths
     input_path: String,
+    main_exe: String,
     command_path: String,
     output_path: String,
     output_folder: String,
@@ -158,6 +159,8 @@ pub struct WrappeApp {
     // UI state
     selected_tab: Tab,
     dark_mode: bool,
+    dragging: bool,
+    drag_offset: Option<egui::Pos2>,
 }
 
 impl Default for WrappeApp {
@@ -169,6 +172,7 @@ impl Default for WrappeApp {
 
         WrappeApp {
             input_path: String::new(),
+            main_exe: String::new(),
             command_path: String::new(),
             output_path: String::new(),
             output_folder: String::new(),
@@ -205,6 +209,8 @@ impl Default for WrappeApp {
             progress_receiver: None,
             selected_tab: Tab::Simple,
             dark_mode: true,
+            dragging: false,
+            drag_offset: None,
         }
     }
 }
@@ -241,24 +247,112 @@ impl eframe::App for WrappeApp {
             self.progress_receiver = None;
         }
 
-        // Top panel - title
-        egui::TopBottomPanel::top("title_bar").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.heading("wrappe GUI");
-                ui.separator();
-                ui.label("Pack executables into self-contained single binaries");
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(if self.dark_mode { "\u{2600}" } else { "\u{1F319}" }).clicked() {
-                        self.dark_mode = !self.dark_mode;
-                        ctx.set_visuals(if self.dark_mode {
-                            egui::Visuals::dark()
-                        } else {
-                            egui::Visuals::light()
-                        });
+        // Custom title bar
+        let title_bar_height = 36.0;
+        egui::TopBottomPanel::top("custom_title_bar")
+            .exact_height(title_bar_height)
+            .show(ctx, |ui| {
+                let bg = if self.dark_mode {
+                    egui::Color32::from_rgb(25, 25, 30)
+                } else {
+                    egui::Color32::from_rgb(230, 230, 235)
+                };
+                ui.painter().rect_filled(ui.max_rect(), egui::Rounding::ZERO, bg);
+
+                // Drag detection
+                let resp = ui.interact(
+                    ui.max_rect(),
+                    ui.next_auto_id(),
+                    egui::Sense::click_and_drag(),
+                );
+                if resp.drag_started() {
+                    self.drag_offset = resp.hover_pos();
+                }
+                if resp.dragged() {
+                    if let Some(start) = self.drag_offset {
+                        let delta = resp.hover_pos().unwrap() - start;
+                        ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(
+                            egui::Pos2::new(
+                                ctx.input(|i| i.viewport().outer_position.unwrap_or_default().x + delta.x),
+                                ctx.input(|i| i.viewport().outer_position.unwrap_or_default().y + delta.y),
+                            ),
+                        ));
                     }
+                }
+                if resp.drag_released() {
+                    self.drag_offset = None;
+                }
+
+                ui.horizontal(|ui| {
+                    ui.add_space(12.0);
+                    let text_color = if self.dark_mode {
+                        egui::Color32::from_rgb(200, 200, 210)
+                    } else {
+                        egui::Color32::from_rgb(40, 40, 50)
+                    };
+                    ui.label(
+                        egui::RichText::new("wrappe GUI")
+                            .size(14.0)
+                            .color(text_color),
+                    );
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("pack your app into one file")
+                            .size(11.0)
+                            .color(if self.dark_mode {
+                                egui::Color32::from_rgb(120, 120, 130)
+                            } else {
+                                egui::Color32::from_rgb(140, 140, 150)
+                            }),
+                    );
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // Close button
+                        let close_btn = egui::Button::new(
+                            egui::RichText::new("\u{2715}").size(14.0),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .min_size(egui::vec2(46.0, title_bar_height));
+                        if ui.add(close_btn).clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+
+                        // Minimize button
+                        let min_btn = egui::Button::new(
+                            egui::RichText::new("\u{2500}").size(14.0),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .min_size(egui::vec2(46.0, title_bar_height));
+                        if ui.add(min_btn).clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                        }
+
+                        // Theme toggle
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    egui::RichText::new(if self.dark_mode {
+                                        "\u{2600}"
+                                    } else {
+                                        "\u{1F319}"
+                                    })
+                                    .size(14.0),
+                                )
+                                .fill(egui::Color32::TRANSPARENT)
+                                .min_size(egui::vec2(40.0, title_bar_height)),
+                            )
+                            .clicked()
+                        {
+                            self.dark_mode = !self.dark_mode;
+                            ctx.set_visuals(if self.dark_mode {
+                                egui::Visuals::dark()
+                            } else {
+                                egui::Visuals::light()
+                            });
+                        }
+                    });
                 });
             });
-        });
 
         // Bottom panel - progress and results
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
@@ -283,8 +377,9 @@ impl eframe::App for WrappeApp {
             }
         });
 
-        // Central panel - tabs
+        // Central panel
         egui::CentralPanel::default().show(ctx, |ui| {
+            // Tab bar
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.selected_tab, Tab::Simple, "Simple");
                 ui.selectable_value(&mut self.selected_tab, Tab::Basic, "Basic");
@@ -322,7 +417,6 @@ impl eframe::App for WrappeApp {
             }
         });
 
-        // Request repaint while packing for progress updates
         if self.packing {
             ctx.request_repaint();
         }
@@ -332,38 +426,50 @@ impl eframe::App for WrappeApp {
 impl WrappeApp {
     fn show_simple_tab(&mut self, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| {
-            ui.add_space(30.0);
-            ui.heading(
+            ui.add_space(20.0);
+
+            // Title
+            ui.label(
                 egui::RichText::new("Super Simple Mode")
-                    .size(26.0)
-                    .color(egui::Color32::from_rgb(80, 80, 80)),
+                    .size(28.0)
+                    .strong(),
             );
             ui.add_space(4.0);
             ui.label(
-                egui::RichText::new("Pick a folder, pick where to save, name it. Done.")
-                    .size(13.0)
-                    .color(egui::Color32::from_rgb(150, 150, 150)),
+                egui::RichText::new("Just pick a folder, choose the main exe, save it. Done.")
+                    .size(13.0),
             );
-            ui.add_space(30.0);
+            ui.add_space(24.0);
 
-            // Clean card-style layout
+            // Card
             let card = egui::Frame::new()
-                .fill(egui::Color32::from_rgb(248, 248, 248))
-                .stroke(egui::Stroke::new(1.5_f32, egui::Color32::from_rgb(200, 200, 200)))
-                .corner_radius(10)
-                .inner_margin(egui::Margin::symmetric(30, 24));
+                .fill(if self.dark_mode {
+                    egui::Color32::from_rgb(35, 35, 42)
+                } else {
+                    egui::Color32::from_rgb(248, 248, 250)
+                })
+                .stroke(egui::Stroke::new(
+                    1.5_f32,
+                    if self.dark_mode {
+                        egui::Color32::from_rgb(60, 60, 70)
+                    } else {
+                        egui::Color32::from_rgb(200, 200, 210)
+                    },
+                ))
+                .corner_radius(12)
+                .inner_margin(egui::Margin::symmetric(32, 28));
 
             card.show(ui, |ui| {
-                ui.set_width(500.0);
+                ui.set_width(520.0);
 
                 // Input folder
-                ui.label(egui::RichText::new("Input Folder").size(15.0).strong());
+                self.field_label(ui, "\u{1F4C1}  Input Folder");
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.add(
                         egui::TextEdit::singleline(&mut self.input_path)
-                            .hint_text("Select the folder to pack...")
-                            .desired_width(380.0),
+                            .hint_text("Select the folder containing your app...")
+                            .desired_width(400.0),
                     );
                     if ui.button("Browse").clicked() {
                         if let Some(path) = rfd::FileDialog::new().pick_folder() {
@@ -377,16 +483,39 @@ impl WrappeApp {
                         }
                     }
                 });
-                ui.add_space(16.0);
+                ui.add_space(18.0);
+
+                // Main executable (NEW)
+                self.field_label(ui, "\u{1F4BE}  Main Executable");
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.main_exe)
+                            .hint_text("e.g. myapp.exe (relative to input folder)")
+                            .desired_width(400.0),
+                    );
+                    if ui.button("Browse").clicked() {
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("Executables", &["exe", ""])
+                            .pick_file()
+                        {
+                            self.main_exe = path
+                                .file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_default();
+                        }
+                    }
+                });
+                ui.add_space(18.0);
 
                 // Output folder
-                ui.label(egui::RichText::new("Output Folder").size(15.0).strong());
+                self.field_label(ui, "\u{1F4C2}  Output Folder");
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.add(
                         egui::TextEdit::singleline(&mut self.output_folder)
                             .hint_text("Where to save the packed file...")
-                            .desired_width(380.0),
+                            .desired_width(400.0),
                     );
                     if ui.button("Browse").clicked() {
                         if let Some(path) = rfd::FileDialog::new().pick_folder() {
@@ -394,43 +523,37 @@ impl WrappeApp {
                         }
                     }
                 });
-                ui.add_space(16.0);
+                ui.add_space(18.0);
 
                 // Output filename
-                ui.label(egui::RichText::new("Output Filename").size(15.0).strong());
+                self.field_label(ui, "\u{1F4DD}  Output Filename");
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.add(
                         egui::TextEdit::singleline(&mut self.output_name)
                             .hint_text("e.g. MyApp")
-                            .desired_width(280.0),
+                            .desired_width(300.0),
                     );
-                    ui.label(
-                        egui::RichText::new(".exe")
-                            .size(15.0)
-                            .color(egui::Color32::from_rgb(120, 120, 120)),
-                    );
+                    ui.label(".exe");
                 });
 
-                // Build full output path preview
+                // Preview
                 if !self.output_folder.is_empty() && !self.output_name.is_empty() {
-                    ui.add_space(8.0);
+                    ui.add_space(10.0);
                     let preview = format!(
                         "{}/{}.exe",
                         self.output_folder.trim_end_matches('/').trim_end_matches('\\'),
                         self.output_name.trim(),
                     );
                     ui.label(
-                        egui::RichText::new(format!("Will save to: {}", preview))
-                            .size(12.0)
-                            .color(egui::Color32::from_rgb(100, 100, 100)),
+                        egui::RichText::new(format!("Saved to: {}", preview))
+                            .size(12.0),
                     );
-                    // Set output_path for build_config
                     self.output_path = preview;
                 }
             });
 
-            ui.add_space(28.0);
+            ui.add_space(24.0);
 
             // Big GO button
             let ready = !self.input_path.is_empty()
@@ -440,23 +563,22 @@ impl WrappeApp {
             ui.add_enabled_ui(!self.packing && ready, |ui| {
                 let btn = egui::Button::new(
                     egui::RichText::new("GO!")
-                        .size(40.0)
+                        .size(42.0)
                         .color(egui::Color32::WHITE),
                 )
-                .fill(egui::Color32::from_rgb(0, 180, 60))
-                .min_size(egui::vec2(300.0, 80.0))
+                .fill(egui::Color32::from_rgb(46, 204, 113))
+                .min_size(egui::vec2(320.0, 85.0))
                 .corner_radius(16);
 
                 if ui.add(btn).clicked() {
-                    // Simple mode: use all defaults for advanced options
-                    self.command_path.clear();
+                    self.command_path = self.main_exe.clone();
                     self.runner_index = 0;
                     self.runner = self.available_runners.first().cloned().unwrap_or_default();
                     self.compression = 8;
                     self.unpack_target = UnpackTarget::Temp;
                     self.versioning = Versioning::SideBySide;
                     self.verification = Verification::Existence;
-                    self.console = ConsoleMode::Auto;
+                    self.console = ConsoleMode::Never;
                     self.current_dir = CurrentDir::Inherit;
                     self.cleanup = false;
                     self.once = false;
@@ -472,12 +594,19 @@ impl WrappeApp {
             if !ready && !self.packing {
                 ui.add_space(8.0);
                 ui.label(
-                    egui::RichText::new("Fill in all three fields above to start")
-                        .size(13.0)
-                        .color(egui::Color32::from_rgb(180, 180, 180)),
+                    egui::RichText::new("Fill in all fields above to start")
+                        .size(13.0),
                 );
             }
         });
+    }
+
+    fn field_label(&self, ui: &mut egui::Ui, text: &str) {
+        ui.label(
+            egui::RichText::new(text)
+                .size(14.0)
+                .strong(),
+        );
     }
 
     fn show_basic_tab(&mut self, ui: &mut egui::Ui) {
@@ -486,7 +615,6 @@ impl WrappeApp {
             .spacing([10.0, 8.0])
             .striped(true)
             .show(ui, |ui| {
-                // Input path
                 ui.label("Input:");
                 ui.add(
                     egui::TextEdit::singleline(&mut self.input_path)
@@ -500,7 +628,6 @@ impl WrappeApp {
                 }
                 ui.end_row();
 
-                // Command path
                 ui.label("Command:");
                 ui.add(
                     egui::TextEdit::singleline(&mut self.command_path)
@@ -514,7 +641,6 @@ impl WrappeApp {
                 }
                 ui.end_row();
 
-                // Output path
                 ui.label("Output:");
                 ui.add(
                     egui::TextEdit::singleline(&mut self.output_path)
@@ -528,13 +654,11 @@ impl WrappeApp {
                 }
                 ui.end_row();
 
-                // Compression level
                 ui.label("Compression:");
                 ui.add(egui::Slider::new(&mut self.compression, 0..=22).text("level"));
                 ui.label(format!("Level: {}", self.compression));
                 ui.end_row();
 
-                // Runner
                 ui.label("Runner:");
                 egui::ComboBox::from_id_salt("runner_combo")
                     .selected_text(&self.runner)
@@ -556,7 +680,6 @@ impl WrappeApp {
                 .spacing([10.0, 6.0])
                 .striped(true)
                 .show(ui, |ui| {
-                    // Unpack target
                     ui.label("Unpack Target:");
                     ui.horizontal(|ui| {
                         ui.selectable_value(&mut self.unpack_target, UnpackTarget::Temp, "Temp");
@@ -565,7 +688,6 @@ impl WrappeApp {
                     });
                     ui.end_row();
 
-                    // Versioning
                     ui.label("Versioning:");
                     ui.horizontal(|ui| {
                         ui.selectable_value(
@@ -578,7 +700,6 @@ impl WrappeApp {
                     });
                     ui.end_row();
 
-                    // Verification
                     ui.label("Verification:");
                     ui.horizontal(|ui| {
                         ui.selectable_value(
@@ -595,7 +716,6 @@ impl WrappeApp {
                     });
                     ui.end_row();
 
-                    // Version string
                     ui.label("Version String:");
                     ui.add(
                         egui::TextEdit::singleline(&mut self.version_string)
@@ -604,7 +724,6 @@ impl WrappeApp {
                     );
                     ui.end_row();
 
-                    // Show information
                     ui.label("Show Info:");
                     ui.horizontal(|ui| {
                         ui.selectable_value(&mut self.show_information, ShowInfo::Title, "Title");
@@ -617,7 +736,6 @@ impl WrappeApp {
                     });
                     ui.end_row();
 
-                    // Console
                     ui.label("Console:");
                     ui.horizontal(|ui| {
                         ui.selectable_value(&mut self.console, ConsoleMode::Auto, "Auto");
@@ -627,7 +745,6 @@ impl WrappeApp {
                     });
                     ui.end_row();
 
-                    // Current directory
                     ui.label("Working Dir:");
                     ui.horizontal(|ui| {
                         ui.selectable_value(&mut self.current_dir, CurrentDir::Inherit, "Inherit");
@@ -641,7 +758,6 @@ impl WrappeApp {
                     });
                     ui.end_row();
 
-                    // Environment variables
                     ui.label("Env Vars:");
                     ui.add(
                         egui::TextEdit::singleline(&mut self.env_vars)
@@ -650,7 +766,6 @@ impl WrappeApp {
                     );
                     ui.end_row();
 
-                    // Icon path
                     ui.label("Icon:");
                     ui.add(
                         egui::TextEdit::singleline(&mut self.icon_path)
@@ -667,7 +782,6 @@ impl WrappeApp {
                     }
                     ui.end_row();
 
-                    // Exclude patterns
                     ui.label("Exclude:");
                     ui.add(
                         egui::TextEdit::singleline(&mut self.exclude_patterns)
@@ -676,7 +790,6 @@ impl WrappeApp {
                     );
                     ui.end_row();
 
-                    // Checkboxes
                     ui.label("Options:");
                     ui.vertical(|ui| {
                         ui.checkbox(&mut self.cleanup, "Cleanup after exit");
