@@ -12,6 +12,10 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "wrappe GUI",
         options,
-        Box::new(|_cc| Ok(Box::new(app::WrappeApp::default()))),
+        Box::new(|cc| {
+            // Start with dark mode
+            cc.egui_ctx.set_visuals(egui::Visuals::dark());
+            Ok(Box::new(app::WrappeApp::default()))
+        }),
     )
 }

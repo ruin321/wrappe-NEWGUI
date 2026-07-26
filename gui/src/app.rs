@@ -157,6 +157,7 @@ pub struct WrappeApp {
 
     // UI state
     selected_tab: Tab,
+    dark_mode: bool,
 }
 
 impl Default for WrappeApp {
@@ -203,6 +204,7 @@ impl Default for WrappeApp {
             pack_thread: None,
             progress_receiver: None,
             selected_tab: Tab::Simple,
+            dark_mode: true,
         }
     }
 }
@@ -245,6 +247,16 @@ impl eframe::App for WrappeApp {
                 ui.heading("wrappe GUI");
                 ui.separator();
                 ui.label("Pack executables into self-contained single binaries");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(if self.dark_mode { "\u{2600}" } else { "\u{1F319}" }).clicked() {
+                        self.dark_mode = !self.dark_mode;
+                        ctx.set_visuals(if self.dark_mode {
+                            egui::Visuals::dark()
+                        } else {
+                            egui::Visuals::light()
+                        });
+                    }
+                });
             });
         });
 
@@ -288,20 +300,22 @@ impl eframe::App for WrappeApp {
 
             ui.separator();
 
-            // Pack button
-            ui.add_enabled_ui(!self.packing && !self.input_path.is_empty(), |ui| {
-                let pack_btn = egui::Button::new(
-                    egui::RichText::new("Pack!")
-                        .size(24.0)
-                        .color(egui::Color32::WHITE),
-                )
-                .fill(egui::Color32::from_rgb(0, 150, 50))
-                .min_size(egui::vec2(200.0, 50.0));
+            // Pack button (hidden in Simple mode which has its own GO button)
+            if self.selected_tab != Tab::Simple {
+                ui.add_enabled_ui(!self.packing && !self.input_path.is_empty(), |ui| {
+                    let pack_btn = egui::Button::new(
+                        egui::RichText::new("Pack!")
+                            .size(24.0)
+                            .color(egui::Color32::WHITE),
+                    )
+                    .fill(egui::Color32::from_rgb(0, 150, 50))
+                    .min_size(egui::vec2(200.0, 50.0));
 
-                if ui.add(pack_btn).clicked() {
-                    self.start_packing();
-                }
-            });
+                    if ui.add(pack_btn).clicked() {
+                        self.start_packing();
+                    }
+                });
+            }
 
             if self.packing {
                 ui.label("Packing in progress...");
