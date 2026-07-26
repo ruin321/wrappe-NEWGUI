@@ -67,6 +67,8 @@ pub struct WrappeApp {
     once: bool,
     build_dictionary: bool,
     exclude_patterns: String,
+    memory_mode: bool,
+    encrypted_memory: bool,
     packing: bool,
     progress: f32,
     progress_total: u64,
@@ -96,6 +98,7 @@ impl Default for WrappeApp {
             show_information: ShowInfo::Title, console: ConsoleMode::Auto,
             current_dir: CurrentDir::Inherit, env_vars: String::new(), icon_path: String::new(),
             cleanup: false, once: false, build_dictionary: false, exclude_patterns: String::new(),
+            memory_mode: true, encrypted_memory: false,
             packing: false, progress: 0.0, progress_total: 0, progress_current: 0,
             progress_message: String::new(), result_message: None, result_error: false,
             pack_thread: None, progress_receiver: None, cancel_flag: None,
@@ -285,6 +288,21 @@ impl WrappeApp {
             });
             ui.add_space(16.0);
 
+            // Memory mode options
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.memory_mode, tr(&self.lang, "Memory Mode", "内存模式", "メモリモード", "메모리 모드", "Режим памяти"));
+                ui.add_space(20.0);
+                ui.add_enabled_ui(self.memory_mode, |ui| {
+                    ui.checkbox(&mut self.encrypted_memory, tr(&self.lang, "Encrypted", "加密内存", "暗号化", "암호화", "Шифрование"));
+                });
+            });
+            if self.memory_mode {
+                ui.add_space(4.0);
+                ui.label(egui::RichText::new(tr(&self.lang, "Runs from temp dir, auto-cleanup, single instance", "从临时目录运行，自动清理，单实例", "一時ディレクトリから実行、自動クリーンアップ、単一インスタンス", "임시 디렉토리에서 실행, 자동 정리, 단일 인스턴스", "Запуск из временной папки, автоочистка, один экземпляр")).size(11.0).weak());
+            }
+
+            ui.add_space(12.0);
+
             let ready = !self.input_path.is_empty() && !self.output_folder.is_empty() && !self.output_name.is_empty();
             ui.add_enabled_ui(!self.packing && ready, |ui| {
                 if ui.add(egui::Button::new(egui::RichText::new("GO!").size(42.0).color(egui::Color32::WHITE)).fill(egui::Color32::from_rgb(46, 204, 113)).min_size(egui::vec2(320.0, 85.0)).rounding(egui::Rounding::same(16.0))).clicked() {
@@ -296,7 +314,15 @@ impl WrappeApp {
                     self.verification = Verification::Existence;
                     self.console = ConsoleMode::Never;
                     self.current_dir = CurrentDir::Inherit;
-                    self.cleanup = false; self.once = false; self.build_dictionary = false;
+                    if self.memory_mode {
+                        self.cleanup = true;
+                        self.once = true;
+                        self.unpack_target = UnpackTarget::Temp;
+                    } else {
+                        self.cleanup = false;
+                        self.once = false;
+                    }
+                    self.build_dictionary = false;
                     self.version_string.clear(); self.env_vars.clear();
                     self.icon_path.clear(); self.exclude_patterns.clear();
                     self.start_packing();
@@ -418,14 +444,16 @@ impl WrappeApp {
                 .rounding(egui::Rounding::same(8.0)).inner_margin(egui::Margin::symmetric(24.0, 16.0))
                 .show(ui, |ui| {
                     ui.set_width(500.0);
-                    ui.label(egui::RichText::new("Quick Guide").size(16.0).strong());
+                    ui.label(egui::RichText::new(tr(&self.lang, "Quick Guide", "快速指南", "クイックガイド", "빠른 가이드", "Краткое руководство")).size(16.0).strong());
                     ui.add_space(8.0);
-                    ui.label("1. Select your app folder (Simple tab)");
-                    ui.label("2. Pick the main .exe file inside it");
-                    ui.label("3. Choose where to save the packed file");
-                    ui.label("4. Hit GO!");
+                    ui.label(tr(&self.lang, "1. Select your app folder (Simple tab)", "1. 选择你的应用文件夹（简单标签页）", "1. アプリのフォルダを選択（簡単タブ）", "1. 앱 폴더 선택 (간단 탭)", "1. Выберите папку приложения"));
+                    ui.label(tr(&self.lang, "2. Pick the main .exe file inside it", "2. 选择里面的主 .exe 文件", "2. 中のメイン.exeファイルを選択", "2. 메인 .exe 파일 선택", "2. Выберите главный .exe файл"));
+                    ui.label(tr(&self.lang, "3. Choose where to save the packed file", "3. 选择打包文件的保存位置", "3. パックしたファイルの保存先を選択", "3. 패킹된 파일 저장 위치 선택", "3. Выберите куда сохранить"));
+                    ui.label(tr(&self.lang, "4. Hit GO!", "4. 点击 GO！", "4. GO!をクリック", "4. GO! 클릭", "4. Нажмите GO!"));
                     ui.add_space(4.0);
-                    ui.label(egui::RichText::new("For more options, use Basic or Advanced tabs.").size(12.0).weak());
+                    ui.label(egui::RichText::new(tr(&self.lang, "For more options, use Basic or Advanced tabs.", "更多选项请使用基础或高级标签页。", "詳細オプションは基本または詳細タブをご利用ください。", "더 많은 옵션은 기본 또는 고급 탭을 사용하세요.", "Больше опций на вкладках Базовый и Продвинутый.")).size(12.0).weak());
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new(tr(&self.lang, "Memory Mode: runs from temp dir with auto-cleanup and single instance.", "内存模式：从临时目录运行，自动清理，单实例。", "メモリモード：一時ディレクトリから実行、自動クリーンアップ。", "메모리 모드: 임시 디렉토리에서 실행, 자동 정리.", "Режим памяти: запуск из врем. папки с автоочисткой.")).size(11.0).weak());
                 });
         });
     }
