@@ -203,7 +203,7 @@ pub fn get_unpack_directory(
     source: &Path,
 ) -> Result<[u8; NAME_SIZE], String> {
     let directory = if let Some(directory) = directory {
-        directory.as_bytes()
+        directory.as_bytes().to_vec()
     } else {
         source
             .file_name()
@@ -265,7 +265,7 @@ pub fn get_command(command_path: &Path) -> Result<[u8; NAME_SIZE], String> {
         return Err("command path is longer than 127 characters".to_string());
     }
     let mut _command = [0; NAME_SIZE];
-    _command[0..command.len()].copy_from_slice(command);
+    _command[0..command.len()].copy_from_slice(&command);
     Ok(_command)
 }
 
