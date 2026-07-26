@@ -496,7 +496,7 @@ impl WrappeApp {
                     self.command_path = self.main_exe.clone();
                     self.runner_index = 0;
                     self.runner = self.available_runners.first().cloned().unwrap_or_default();
-                    self.compression = 8;
+                    // Keep user's compression preset, don't override
                     self.unpack_target = UnpackTarget::Temp;
                     self.versioning = Versioning::SideBySide;
                     self.verification = Verification::Existence;
