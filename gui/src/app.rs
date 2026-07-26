@@ -149,20 +149,6 @@ impl Lang {
     }
 }
 
-// Translation macro-like system
-macro_rules! t {
-    ($self:expr, $key:ident) => {
-        match $self.lang {
-            Lang::En => $key::EN,
-            Lang::Zh => $key::ZH,
-            Lang::Ja => $key::JA,
-            Lang::Ko => $key::KO,
-            Lang::Ru => $key::RU,
-        }
-    };
-}
-
-// Translation keys
 mod tr {
     pub struct AppTitle;
     impl AppTitle { pub const EN: &str = "wrappe GUI"; pub const ZH: &str = "wrappe GUI"; pub const JA: &str = "wrappe GUI"; pub const KO: &str = "wrappe GUI"; pub const RU: &str = "wrappe GUI"; }
@@ -304,8 +290,19 @@ mod tr {
     impl SingleInstance { pub const EN: &str = "Single instance only"; pub const ZH: &str = "仅允许单实例"; pub const JA: &str = "単一インスタンスのみ"; pub const KO: &str = "단일 인스턴스만"; pub const RU: &str = "Только один экземпляр"; }
 
     pub struct BuildDict;
-    impl BuildDict { pub const EN: &str = "Build compression dictionary"; pub const ZH: &str = "构建压缩字典"; pub const JA: &str = "圧縮辞書を構築"; pub const KO: &str = "압축 사전 빌드"; pub const RU: &str = "Построить словарь сжатия"; }
+    impl BuildDict { pub const EN: &str = "Build compression dictionary"; pub const ZH: &str = "构建压缩字典"; pub const JA: &str = "圧縮辞書を構築"; pub const KO: &str = "압축 사전 빌드"; pub const RU: &str = "Построить словарь сжатия";     }
 }
+
+macro_rules! t {
+    ($self:expr, $key:ident) => {
+        match $self.lang {
+            Lang::En => $key::EN,
+            Lang::Zh => $key::ZH,
+            Lang::Ja => $key::JA,
+            Lang::Ko => $key::KO,
+            Lang::Ru => $key::RU,
+        }
+    };
 }
 
 pub struct WrappeApp {
