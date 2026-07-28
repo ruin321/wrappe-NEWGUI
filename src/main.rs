@@ -156,6 +156,7 @@ fn main() {
     config.output = args.output;
     config.arguments = args.arguments;
     config.exclude_patterns = args.exclude;
+    config.admin = args.admin;
 
     // Version string: --version-from-file overrides --version-string
     if let Some(ref path) = args.version_from_file {

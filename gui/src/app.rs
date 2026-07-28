@@ -407,6 +407,7 @@ impl WrappeApp {
             output: if self.output_path.is_empty() { None } else { Some(PathBuf::from(&self.output_path)) },
             arguments: Vec::new(),
             exclude_patterns: self.exclude_patterns.split_whitespace().filter(|s| !s.is_empty()).map(|s| s.to_string()).collect(),
+            admin: self.admin_mode,
         }
     }
 
