@@ -37,6 +37,7 @@ pub struct PackConfig {
     pub output: Option<PathBuf>,
     pub arguments: Vec<String>,
     pub exclude_patterns: Vec<String>,
+    pub admin: bool,
 }
 
 impl Default for PackConfig {
@@ -62,6 +63,7 @@ impl Default for PackConfig {
             output: None,
             arguments: Vec::new(),
             exclude_patterns: Vec::new(),
+            admin: false,
         }
     }
 }

@@ -63,6 +63,9 @@ pub struct Args {
     /// Read version string from a file
     #[arg(long, conflicts_with = "version_string")]
     version_from_file: Option<PathBuf>,
+    /// Require admin privileges when running the packed executable
+    #[arg(long, default_value = "false")]
+    admin:            bool,
     /// Print available runners
     #[arg(short = 'l', long)]
     #[allow(dead_code)]

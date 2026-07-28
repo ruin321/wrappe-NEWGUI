@@ -38,50 +38,24 @@ impl Lang {
     fn flag(&self) -> &str { match self { Self::En => "EN", Self::Zh => "中", Self::Ja => "日", Self::Ko => "한", Self::Ru => "RU" } }
 }
 
-// Simple translation function
 fn tr<'a>(lang: &Lang, en: &'a str, zh: &'a str, ja: &'a str, ko: &'a str, ru: &'a str) -> &'a str {
     match lang { Lang::En => en, Lang::Zh => zh, Lang::Ja => ja, Lang::Ko => ko, Lang::Ru => ru }
 }
 
 pub struct WrappeApp {
-    input_path: String,
-    main_exe: String,
-    command_path: String,
-    output_path: String,
-    output_folder: String,
-    output_name: String,
-    compression: u32,
-    runner: String,
-    runner_index: usize,
-    available_runners: Vec<String>,
-    unpack_target: UnpackTarget,
-    versioning: Versioning,
-    verification: Verification,
-    version_string: String,
-    show_information: ShowInfo,
-    console: ConsoleMode,
-    current_dir: CurrentDir,
-    env_vars: String,
-    icon_path: String,
-    cleanup: bool,
-    once: bool,
-    build_dictionary: bool,
-    exclude_patterns: String,
-    memory_mode: bool,
-    encrypted_memory: bool,
-    packing: bool,
-    progress: f32,
-    progress_total: u64,
-    progress_current: u64,
-    progress_message: String,
-    result_message: Option<String>,
-    result_error: bool,
+    input_path: String, main_exe: String, command_path: String,
+    output_path: String, output_folder: String, output_name: String,
+    compression: u32, runner: String, runner_index: usize, available_runners: Vec<String>,
+    unpack_target: UnpackTarget, versioning: Versioning, verification: Verification,
+    version_string: String, show_information: ShowInfo, console: ConsoleMode, current_dir: CurrentDir,
+    env_vars: String, icon_path: String, cleanup: bool, once: bool, build_dictionary: bool,
+    exclude_patterns: String, memory_mode: bool, encrypted_memory: bool, admin_mode: bool,
+    packing: bool, progress: f32, progress_total: u64, progress_current: u64,
+    progress_message: String, result_message: Option<String>, result_error: bool,
     pack_thread: Option<thread::JoinHandle<()>>,
     progress_receiver: Option<mpsc::Receiver<PackProgress>>,
     cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-    selected_tab: Tab,
-    dark_mode: bool,
-    lang: Lang,
+    selected_tab: Tab, dark_mode: bool, lang: Lang,
 }
 
 impl Default for WrappeApp {
@@ -90,15 +64,14 @@ impl Default for WrappeApp {
         WrappeApp {
             input_path: String::new(), main_exe: String::new(), command_path: String::new(),
             output_path: String::new(), output_folder: String::new(), output_name: String::new(),
-            compression: 8,
-            runner: runners.first().cloned().unwrap_or_default(), runner_index: 0,
+            compression: 8, runner: runners.first().cloned().unwrap_or_default(), runner_index: 0,
             available_runners: runners,
             unpack_target: UnpackTarget::Temp, versioning: Versioning::SideBySide,
             verification: Verification::Existence, version_string: String::new(),
             show_information: ShowInfo::Title, console: ConsoleMode::Auto,
             current_dir: CurrentDir::Inherit, env_vars: String::new(), icon_path: String::new(),
             cleanup: false, once: false, build_dictionary: false, exclude_patterns: String::new(),
-            memory_mode: true, encrypted_memory: false,
+            memory_mode: true, encrypted_memory: false, admin_mode: false,
             packing: false, progress: 0.0, progress_total: 0, progress_current: 0,
             progress_message: String::new(), result_message: None, result_error: false,
             pack_thread: None, progress_receiver: None, cancel_flag: None,
@@ -112,19 +85,13 @@ impl eframe::App for WrappeApp {
         let mut should_clear_receiver = false;
         if let Some(ref receiver) = self.progress_receiver {
             while let Ok(progress) = receiver.try_recv() {
-                let msg = progress.message.clone();
-                let stage = progress.stage;
-                let is_err = progress.is_error;
-                self.progress_message = msg.clone();
-                self.progress_current = progress.current;
-                self.progress_total = progress.total;
+                let msg = progress.message.clone(); let stage = progress.stage; let is_err = progress.is_error;
+                self.progress_message = msg.clone(); self.progress_current = progress.current; self.progress_total = progress.total;
                 if progress.total > 0 { self.progress = progress.current as f32 / progress.total as f32; }
                 if stage == PackStage::Done {
-                    self.packing = false; self.result_message = Some(msg.clone());
-                    self.result_error = is_err; should_clear_receiver = true;
+                    self.packing = false; self.result_message = Some(msg.clone()); self.result_error = is_err; should_clear_receiver = true;
                 } else if stage == PackStage::Cancelled {
-                    self.packing = false; self.result_message = Some("Cancelled".to_string());
-                    self.result_error = true; should_clear_receiver = true;
+                    self.packing = false; self.result_message = Some("Cancelled".to_string()); self.result_error = true; should_clear_receiver = true;
                 } else if is_err {
                     self.result_message = Some(format!("Error: {}", msg)); self.result_error = true;
                 }
@@ -139,13 +106,11 @@ impl eframe::App for WrappeApp {
                 ui.add_space(8.0);
                 ui.label(egui::RichText::new(tr(&self.lang, "pack your app into one file", "打包你的应用到一个文件", "アプリを1つのファイルに", "앱을 하나의 파일로 패킹", "упакуйте приложение в один файл")).size(11.0).weak());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    egui::ComboBox::from_id_salt("lang_selector")
-                        .selected_text(self.lang.flag()).width(50.0)
-                        .show_ui(ui, |ui| {
-                            for lang in &[Lang::En, Lang::Zh, Lang::Ja, Lang::Ko, Lang::Ru] {
-                                if ui.selectable_label(self.lang == *lang, lang.name()).clicked() { self.lang = lang.clone(); }
-                            }
-                        });
+                    egui::ComboBox::from_id_salt("lang_selector").selected_text(self.lang.flag()).width(50.0).show_ui(ui, |ui| {
+                        for lang in &[Lang::En, Lang::Zh, Lang::Ja, Lang::Ko, Lang::Ru] {
+                            if ui.selectable_label(self.lang == *lang, lang.name()).clicked() { self.lang = lang.clone(); }
+                        }
+                    });
                     if ui.button(if self.dark_mode { "\u{2600}" } else { "\u{1F319}" }).clicked() {
                         self.dark_mode = !self.dark_mode;
                         ctx.set_visuals(if self.dark_mode { egui::Visuals::dark() } else { egui::Visuals::light() });
@@ -163,13 +128,9 @@ impl eframe::App for WrappeApp {
                 if self.result_error { ui.colored_label(egui::Color32::RED, msg); }
                 else { ui.colored_label(egui::Color32::GREEN, msg); }
                 if !self.result_error && !self.output_folder.is_empty() {
-                    if ui.button(tr(&self.lang, "Open Folder", "打开文件夹", "フォルダを開く", "폴더 열기", "Открыть папку")).clicked() {
-                        let _ = open::that(&self.output_folder);
-                    }
+                    if ui.button(tr(&self.lang, "Open Folder", "打开文件夹", "フォルダを開く", "폴더 열기", "Открыть папку")).clicked() { let _ = open::that(&self.output_folder); }
                 }
-                if ui.button(tr(&self.lang, "Clear", "清除", "クリア", "지우기", "Очистить")).clicked() {
-                    self.result_message = None; self.result_error = false;
-                }
+                if ui.button(tr(&self.lang, "Clear", "清除", "クリア", "지우기", "Очистить")).clicked() { self.result_message = None; self.result_error = false; }
             }
         });
 
@@ -193,17 +154,13 @@ impl eframe::App for WrappeApp {
             ui.separator();
             if self.selected_tab != Tab::Simple {
                 ui.add_enabled_ui(!self.packing && !self.input_path.is_empty(), |ui| {
-                    if ui.add(egui::Button::new(egui::RichText::new("Pack!").size(24.0).color(egui::Color32::WHITE)).fill(egui::Color32::from_rgb(0, 150, 50)).min_size(egui::vec2(200.0, 50.0))).clicked() {
-                        self.start_packing();
-                    }
+                    if ui.add(egui::Button::new(egui::RichText::new("Pack!").size(24.0).color(egui::Color32::WHITE)).fill(egui::Color32::from_rgb(0, 150, 50)).min_size(egui::vec2(200.0, 50.0))).clicked() { self.start_packing(); }
                 });
             }
             if self.packing {
                 ui.horizontal(|ui| {
                     ui.label(tr(&self.lang, "Packing in progress...", "打包中...", "パック中...", "패킹 중...", "Упаковка..."));
-                    if ui.button("\u{2716} Cancel").clicked() {
-                        if let Some(ref flag) = self.cancel_flag { flag.store(true, std::sync::atomic::Ordering::Relaxed); }
-                    }
+                    if ui.button("\u{2716} Cancel").clicked() { if let Some(ref flag) = self.cancel_flag { flag.store(true, std::sync::atomic::Ordering::Relaxed); } }
                 });
             }
         });
@@ -227,103 +184,81 @@ impl WrappeApp {
 
             card.show(ui, |ui| {
                 ui.set_width(520.0);
-
+                // Input folder
                 ui.label(egui::RichText::new(format!("\u{1F4C1}  {}", tr(&self.lang, "Input Folder", "输入文件夹", "入力フォルダ", "입력 폴더", "Входная папка"))).size(14.0).strong());
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.add(egui::TextEdit::singleline(&mut self.input_path).hint_text(tr(&self.lang, "Select the folder containing your app...", "选择包含你应用的文件夹...", "アプリが含まれるフォルダを選択...", "앱이 있는 폴더 선택...", "Выберите папку с приложением...")).desired_width(400.0));
                     if ui.button(tr(&self.lang, "Browse", "浏览", "参照", "찾기", "Обзор")).clicked() {
-                        if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                            self.input_path = path.display().to_string();
-                            if self.output_name.is_empty() { self.output_name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(); }
-                        }
+                        if let Some(path) = rfd::FileDialog::new().pick_folder() { self.input_path = path.display().to_string(); if self.output_name.is_empty() { self.output_name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(); } }
                     }
                 });
                 ui.add_space(18.0);
-
+                // Main executable
                 ui.label(egui::RichText::new(format!("\u{1F4BE}  {}", tr(&self.lang, "Main Executable", "主程序", "メイン実行ファイル", "메인 실행 파일", "Главный исполняемый файл"))).size(14.0).strong());
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.add(egui::TextEdit::singleline(&mut self.main_exe).hint_text(tr(&self.lang, "e.g. myapp.exe (relative to input folder)", "例如 myapp.exe（相对于输入文件夹）", "例: myapp.exe（入力フォルダからの相対パス）", "예: myapp.exe (입력 폴더 기준)", "напр. myapp.exe (относительно папки)")).desired_width(400.0));
                     if ui.button(tr(&self.lang, "Browse", "浏览", "参照", "찾기", "Обзор")).clicked() {
-                        if let Some(path) = rfd::FileDialog::new().add_filter("Executables", &["exe", ""]).pick_file() {
-                            self.main_exe = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                        }
+                        if let Some(path) = rfd::FileDialog::new().add_filter("Executables", &["exe", ""]).pick_file() { self.main_exe = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(); }
                     }
                 });
                 ui.add_space(18.0);
-
+                // Output folder
                 ui.label(egui::RichText::new(format!("\u{1F4C2}  {}", tr(&self.lang, "Output Folder", "输出文件夹", "出力フォルダ", "출력 폴더", "Выходная папка"))).size(14.0).strong());
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.add(egui::TextEdit::singleline(&mut self.output_folder).hint_text(tr(&self.lang, "Where to save the packed file...", "打包文件保存到哪里...", "パックしたファイルの保存先...", "패킹된 파일 저장 위치...", "Куда сохранить упакованный файл...")).desired_width(400.0));
-                    if ui.button(tr(&self.lang, "Browse", "浏览", "参照", "찾기", "Обзор")).clicked() {
-                        if let Some(path) = rfd::FileDialog::new().pick_folder() { self.output_folder = path.display().to_string(); }
-                    }
+                    if ui.button(tr(&self.lang, "Browse", "浏览", "参照", "찾기", "Обзор")).clicked() { if let Some(path) = rfd::FileDialog::new().pick_folder() { self.output_folder = path.display().to_string(); } }
                 });
                 ui.add_space(18.0);
-
+                // Output filename
                 ui.label(egui::RichText::new(format!("\u{1F4DD}  {}", tr(&self.lang, "Output Filename", "输出文件名", "出力ファイル名", "출력 파일명", "Имя выходного файла"))).size(14.0).strong());
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.add(egui::TextEdit::singleline(&mut self.output_name).hint_text(tr(&self.lang, "e.g. MyApp", "例如 MyApp", "例: MyApp", "예: MyApp", "напр. MyApp")).desired_width(300.0));
                     ui.label(".exe");
                 });
-
                 if !self.output_folder.is_empty() && !self.output_name.is_empty() {
                     ui.add_space(10.0);
-                    let preview = format!("{}/{}.exe", self.output_folder.trim_end_matches('/').trim_end_matches('\\'), self.output_name.trim());
-                    ui.label(egui::RichText::new(format!("{} {}", tr(&self.lang, "Saved to:", "保存到：", "保存先：", "저장 위치:", "Сохранено в:"), preview)).size(12.0));
-                    self.output_path = preview;
+                    self.output_path = format!("{}/{}.exe", self.output_folder.trim_end_matches('/').trim_end_matches('\\'), self.output_name.trim());
+                    ui.label(egui::RichText::new(format!("{} {}", tr(&self.lang, "Saved to:", "保存到：", "保存先：", "저장 위치:", "Сохранено в:"), self.output_path)).size(12.0));
                 }
             });
 
             ui.add_space(16.0);
+            // Compression
             ui.horizontal(|ui| {
                 ui.label(format!("{} ", tr(&self.lang, "Compression:", "压缩：", "圧縮：", "압축:", "Сжатие:")));
-                ui.selectable_value(&mut self.compression, 3, "Fast");
-                ui.selectable_value(&mut self.compression, 8, "Balanced");
-                ui.selectable_value(&mut self.compression, 16, "Small");
-                ui.selectable_value(&mut self.compression, 22, "Tiny");
+                ui.selectable_value(&mut self.compression, 3, "Fast"); ui.selectable_value(&mut self.compression, 8, "Balanced");
+                ui.selectable_value(&mut self.compression, 16, "Small"); ui.selectable_value(&mut self.compression, 22, "Tiny");
             });
-            ui.add_space(16.0);
-
-            // Memory mode options
+            ui.add_space(12.0);
+            // Options row
             ui.horizontal(|ui| {
                 ui.checkbox(&mut self.memory_mode, tr(&self.lang, "Memory Mode", "内存模式", "メモリモード", "메모리 모드", "Режим памяти"));
-                ui.add_space(20.0);
-                ui.add_enabled_ui(self.memory_mode, |ui| {
-                    ui.checkbox(&mut self.encrypted_memory, tr(&self.lang, "Encrypted", "加密内存", "暗号化", "암호화", "Шифрование"));
-                });
+                ui.add_space(16.0);
+                ui.checkbox(&mut self.admin_mode, tr(&self.lang, "Run as Admin", "管理员运行", "管理者として実行", "관리자 권한", "Запуск от админа"));
             });
-            if self.memory_mode {
+            if self.memory_mode || self.admin_mode {
                 ui.add_space(4.0);
-                ui.label(egui::RichText::new(tr(&self.lang, "Runs from temp dir, auto-cleanup, single instance", "从临时目录运行，自动清理，单实例", "一時ディレクトリから実行、自動クリーンアップ、単一インスタンス", "임시 디렉토리에서 실행, 자동 정리, 단일 인스턴스", "Запуск из временной папки, автоочистка, один экземпляр")).size(11.0).weak());
+                let mut hints = Vec::new();
+                if self.memory_mode { hints.push(tr(&self.lang, "auto-cleanup", "自动清理", "自動クリーンアップ", "자동 정리", "автоочистка")); }
+                if self.admin_mode { hints.push(tr(&self.lang, "admin privileges", "管理员权限", "管理者権限", "관리자 권한", "права админа")); }
+                ui.label(egui::RichText::new(format!("{} {}", tr(&self.lang, "Enabled:", "已启用：", "有効：", "활성화:", "Включено:"), hints.join(", "))).size(11.0).weak());
             }
 
             ui.add_space(12.0);
-
             let ready = !self.input_path.is_empty() && !self.output_folder.is_empty() && !self.output_name.is_empty();
             ui.add_enabled_ui(!self.packing && ready, |ui| {
                 if ui.add(egui::Button::new(egui::RichText::new("GO!").size(42.0).color(egui::Color32::WHITE)).fill(egui::Color32::from_rgb(46, 204, 113)).min_size(egui::vec2(320.0, 85.0)).rounding(egui::Rounding::same(16.0))).clicked() {
-                    self.command_path = self.main_exe.clone();
-                    self.runner_index = 0;
+                    self.command_path = self.main_exe.clone(); self.runner_index = 0;
                     self.runner = self.available_runners.first().cloned().unwrap_or_default();
-                    self.unpack_target = UnpackTarget::Temp;
-                    self.versioning = Versioning::SideBySide;
-                    self.verification = Verification::Existence;
-                    self.console = ConsoleMode::Never;
+                    self.unpack_target = UnpackTarget::Temp; self.versioning = Versioning::SideBySide;
+                    self.verification = Verification::Existence; self.console = ConsoleMode::Never;
                     self.current_dir = CurrentDir::Inherit;
-                    if self.memory_mode {
-                        self.cleanup = true;
-                        self.once = true;
-                        self.unpack_target = UnpackTarget::Temp;
-                    } else {
-                        self.cleanup = false;
-                        self.once = false;
-                    }
-                    self.build_dictionary = false;
-                    self.version_string.clear(); self.env_vars.clear();
+                    self.cleanup = self.memory_mode; self.once = self.memory_mode;
+                    self.build_dictionary = false; self.version_string.clear(); self.env_vars.clear();
                     self.icon_path.clear(); self.exclude_patterns.clear();
                     self.start_packing();
                 }
@@ -337,27 +272,25 @@ impl WrappeApp {
 
     fn show_basic_tab(&mut self, ui: &mut egui::Ui) {
         egui::Grid::new("basic_grid").num_columns(3).spacing([10.0, 8.0]).striped(true).show(ui, |ui| {
-            ui.label("Input:");
-            ui.add(egui::TextEdit::singleline(&mut self.input_path).hint_text("Directory or executable to pack...").desired_width(400.0));
-            if ui.button("Browse...").clicked() { if let Some(path) = rfd::FileDialog::new().pick_folder() { self.input_path = path.display().to_string(); } }
+            ui.label(tr(&self.lang, "Input:", "输入：", "入力：", "입력:", "Вход:"));
+            ui.add(egui::TextEdit::singleline(&mut self.input_path).hint_text(tr(&self.lang, "Directory or executable to pack...", "要打包的目录或可执行文件...", "パックするディレクトリまたは実行ファイル...", "패킹할 디렉토리 또는 실행 파일...", "Папка или исполняемый файл...")).desired_width(400.0));
+            if ui.button(tr(&self.lang, "Browse...", "浏览...", "参照...", "찾기...", "Обзор...")).clicked() { if let Some(path) = rfd::FileDialog::new().pick_folder() { self.input_path = path.display().to_string(); } }
             ui.end_row();
-            ui.label("Command:");
-            ui.add(egui::TextEdit::singleline(&mut self.command_path).hint_text("Executable relative to input...").desired_width(400.0));
-            if ui.button("Browse...").clicked() { if let Some(path) = rfd::FileDialog::new().pick_file() { self.command_path = path.display().to_string(); } }
+            ui.label(tr(&self.lang, "Command:", "命令：", "コマンド：", "명령:", "Команда:"));
+            ui.add(egui::TextEdit::singleline(&mut self.command_path).hint_text(tr(&self.lang, "Executable relative to input...", "相对于输入目录的可执行文件...", "入力に対する実行ファイル...", "입력 기준 실행 파일...", "Исполняемый файл относительно входа...")).desired_width(400.0));
+            if ui.button(tr(&self.lang, "Browse...", "浏览...", "参照...", "찾기...", "Обзор...")).clicked() { if let Some(path) = rfd::FileDialog::new().pick_file() { self.command_path = path.display().to_string(); } }
             ui.end_row();
-            ui.label("Output:");
-            ui.add(egui::TextEdit::singleline(&mut self.output_path).hint_text("Output executable path...").desired_width(400.0));
-            if ui.button("Save as...").clicked() { if let Some(path) = rfd::FileDialog::new().save_file() { self.output_path = path.display().to_string(); } }
+            ui.label(tr(&self.lang, "Output:", "输出：", "出力：", "출력:", "Выход:"));
+            ui.add(egui::TextEdit::singleline(&mut self.output_path).hint_text(tr(&self.lang, "Output executable path...", "输出可执行文件路径...", "出力実行ファイルのパス...", "출력 실행 파일 경로...", "Путь выходного файла...")).desired_width(400.0));
+            if ui.button(tr(&self.lang, "Save as...", "另存为...", "名前を付けて保存...", "다른 이름으로 저장...", "Сохранить как...")).clicked() { if let Some(path) = rfd::FileDialog::new().save_file() { self.output_path = path.display().to_string(); } }
             ui.end_row();
-            ui.label("Compression:");
-            ui.add(egui::Slider::new(&mut self.compression, 0..=22).text("level"));
-            ui.label(format!("Level: {}", self.compression));
+            ui.label(tr(&self.lang, "Compression:", "压缩：", "圧縮：", "압축:", "Сжатие:"));
+            ui.add(egui::Slider::new(&mut self.compression, 0..=22).text(tr(&self.lang, "level", "级别", "レベル", "레벨", "уровень")));
+            ui.label(format!("{}: {}", tr(&self.lang, "Level", "级别", "レベル", "레벨", "Уровень"), self.compression));
             ui.end_row();
-            ui.label("Runner:");
+            ui.label(tr(&self.lang, "Runner:", "运行器：", "ランナー：", "런너:", "Раннер:"));
             egui::ComboBox::from_id_salt("runner_combo").selected_text(&self.runner).show_ui(ui, |ui| {
-                for (i, r) in self.available_runners.iter().enumerate() {
-                    if ui.selectable_value(&mut self.runner_index, i, r).clicked() { self.runner = r.clone(); }
-                }
+                for (i, r) in self.available_runners.iter().enumerate() { if ui.selectable_value(&mut self.runner_index, i, r).clicked() { self.runner = r.clone(); } }
             });
             ui.end_row();
         });
@@ -366,59 +299,59 @@ impl WrappeApp {
     fn show_advanced_tab(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
             egui::Grid::new("advanced_grid").num_columns(2).spacing([10.0, 6.0]).striped(true).show(ui, |ui| {
-                ui.label("Unpack Target:");
+                ui.label(tr(&self.lang, "Unpack Target:", "解压目标：", "展開先：", "압축 해제 대상:", "Цель распаковки:"));
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.unpack_target, UnpackTarget::Temp, "Temp");
-                    ui.selectable_value(&mut self.unpack_target, UnpackTarget::Local, "Local");
-                    ui.selectable_value(&mut self.unpack_target, UnpackTarget::Cwd, "CWD");
+                    ui.selectable_value(&mut self.unpack_target, UnpackTarget::Temp, tr(&self.lang, "Temp", "临时", "一時", "임시", "Врем"));
+                    ui.selectable_value(&mut self.unpack_target, UnpackTarget::Local, tr(&self.lang, "Local", "本地", "ローカル", "로컬", "Локально"));
+                    ui.selectable_value(&mut self.unpack_target, UnpackTarget::Cwd, tr(&self.lang, "CWD", "当前目录", "現在のディレクトリ", "현재 디렉토리", "Тек. папка"));
                 }); ui.end_row();
-                ui.label("Versioning:");
+                ui.label(tr(&self.lang, "Versioning:", "版本策略：", "バージョン管理：", "버전 관리:", "Версионирование:"));
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.versioning, Versioning::SideBySide, "Side-by-side");
-                    ui.selectable_value(&mut self.versioning, Versioning::Replace, "Replace");
-                    ui.selectable_value(&mut self.versioning, Versioning::None, "None");
+                    ui.selectable_value(&mut self.versioning, Versioning::SideBySide, tr(&self.lang, "Side-by-side", "并存", "並存", "병존", "Рядом"));
+                    ui.selectable_value(&mut self.versioning, Versioning::Replace, tr(&self.lang, "Replace", "替换", "置換", "교체", "Заменить"));
+                    ui.selectable_value(&mut self.versioning, Versioning::None, tr(&self.lang, "None", "无", "なし", "없음", "Нет"));
                 }); ui.end_row();
-                ui.label("Verification:");
+                ui.label(tr(&self.lang, "Verification:", "校验：", "検証：", "검증:", "Проверка:"));
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.verification, Verification::Existence, "Existence");
-                    ui.selectable_value(&mut self.verification, Verification::Checksum, "Checksum");
-                    ui.selectable_value(&mut self.verification, Verification::None, "None");
+                    ui.selectable_value(&mut self.verification, Verification::Existence, tr(&self.lang, "Existence", "存在", "存在", "존재", "Сущ."));
+                    ui.selectable_value(&mut self.verification, Verification::Checksum, tr(&self.lang, "Checksum", "校验和", "チェックサム", "체크섬", "Контр. сумма"));
+                    ui.selectable_value(&mut self.verification, Verification::None, tr(&self.lang, "None", "无", "なし", "없음", "Нет"));
                 }); ui.end_row();
-                ui.label("Version String:");
-                ui.add(egui::TextEdit::singleline(&mut self.version_string).hint_text("Custom version (max 16 chars)...").desired_width(300.0)); ui.end_row();
-                ui.label("Show Info:");
+                ui.label(tr(&self.lang, "Version String:", "版本字符串：", "バージョン文字列：", "버전 문자열:", "Строка версии:"));
+                ui.add(egui::TextEdit::singleline(&mut self.version_string).hint_text(tr(&self.lang, "Custom version (max 16 chars)...", "自定义版本（最多16字符）...", "カスタムバージョン（最大16文字）...", "사용자 정의 버전 (최대 16자)...", "Своя версия (макс 16 симв.)...")).desired_width(300.0)); ui.end_row();
+                ui.label(tr(&self.lang, "Show Info:", "显示信息：", "情報表示：", "정보 표시:", "Показывать инфо:"));
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.show_information, ShowInfo::Title, "Title");
-                    ui.selectable_value(&mut self.show_information, ShowInfo::Verbose, "Verbose");
-                    ui.selectable_value(&mut self.show_information, ShowInfo::None, "None");
+                    ui.selectable_value(&mut self.show_information, ShowInfo::Title, tr(&self.lang, "Title", "标题", "タイトル", "제목", "Заголовок"));
+                    ui.selectable_value(&mut self.show_information, ShowInfo::Verbose, tr(&self.lang, "Verbose", "详细", "詳細", "상세", "Подробно"));
+                    ui.selectable_value(&mut self.show_information, ShowInfo::None, tr(&self.lang, "None", "无", "なし", "없음", "Нет"));
                 }); ui.end_row();
-                ui.label("Console:");
+                ui.label(tr(&self.lang, "Console:", "控制台：", "コンソール：", "콘솔:", "Консоль:"));
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.console, ConsoleMode::Auto, "Auto");
-                    ui.selectable_value(&mut self.console, ConsoleMode::Always, "Always");
-                    ui.selectable_value(&mut self.console, ConsoleMode::Never, "Never");
-                    ui.selectable_value(&mut self.console, ConsoleMode::Attach, "Attach");
+                    ui.selectable_value(&mut self.console, ConsoleMode::Auto, tr(&self.lang, "Auto", "自动", "自動", "자동", "Авто"));
+                    ui.selectable_value(&mut self.console, ConsoleMode::Always, tr(&self.lang, "Always", "总是", "常に", "항상", "Всегда"));
+                    ui.selectable_value(&mut self.console, ConsoleMode::Never, tr(&self.lang, "Never", "从不", "なし", "없음", "Никогда"));
+                    ui.selectable_value(&mut self.console, ConsoleMode::Attach, tr(&self.lang, "Attach", "附加", "アタッチ", "연결", "Прикрепить"));
                 }); ui.end_row();
-                ui.label("Working Dir:");
+                ui.label(tr(&self.lang, "Working Dir:", "工作目录：", "作業ディレクトリ：", "작업 디렉토리:", "Рабочая папка:"));
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.current_dir, CurrentDir::Inherit, "Inherit");
-                    ui.selectable_value(&mut self.current_dir, CurrentDir::Unpack, "Unpack");
-                    ui.selectable_value(&mut self.current_dir, CurrentDir::Runner, "Runner");
-                    ui.selectable_value(&mut self.current_dir, CurrentDir::Command, "Command");
+                    ui.selectable_value(&mut self.current_dir, CurrentDir::Inherit, tr(&self.lang, "Inherit", "继承", "継承", "상속", "Наследовать"));
+                    ui.selectable_value(&mut self.current_dir, CurrentDir::Unpack, tr(&self.lang, "Unpack", "解压目录", "展開先", "압축 해제", "Распаковка"));
+                    ui.selectable_value(&mut self.current_dir, CurrentDir::Runner, tr(&self.lang, "Runner", "运行器", "ランナー", "런너", "Раннер"));
+                    ui.selectable_value(&mut self.current_dir, CurrentDir::Command, tr(&self.lang, "Command", "命令", "コマンド", "명령", "Команда"));
                 }); ui.end_row();
-                ui.label("Env Vars:");
+                ui.label(tr(&self.lang, "Env Vars:", "环境变量：", "環境変数：", "환경 변수:", "Перем. окружения:"));
                 ui.add(egui::TextEdit::singleline(&mut self.env_vars).hint_text("KEY1=value1 KEY2=value2 ...").desired_width(400.0)); ui.end_row();
-                ui.label("Icon:");
-                ui.add(egui::TextEdit::singleline(&mut self.icon_path).hint_text("Path to .ico file (Windows only)...").desired_width(300.0));
-                if ui.button("Browse...").clicked() { if let Some(path) = rfd::FileDialog::new().add_filter("Icons", &["ico", "png", "jpg"]).pick_file() { self.icon_path = path.display().to_string(); } }
+                ui.label(tr(&self.lang, "Icon:", "图标：", "アイコン：", "아이콘:", "Иконка:"));
+                ui.add(egui::TextEdit::singleline(&mut self.icon_path).hint_text(tr(&self.lang, "Path to .ico file (Windows only)...", ".ico 文件路径（仅 Windows）...", ".icoファイルのパス（Windowsのみ）...", ".ico 파일 경로 (Windows만)...", "Путь к .ico (только Windows)...")).desired_width(300.0));
+                if ui.button(tr(&self.lang, "Browse...", "浏览...", "参照...", "찾기...", "Обзор...")).clicked() { if let Some(path) = rfd::FileDialog::new().add_filter("Icons", &["ico", "png", "jpg"]).pick_file() { self.icon_path = path.display().to_string(); } }
                 ui.end_row();
-                ui.label("Exclude:");
+                ui.label(tr(&self.lang, "Exclude:", "排除：", "除外：", "제외:", "Исключить:"));
                 ui.add(egui::TextEdit::singleline(&mut self.exclude_patterns).hint_text("*.log node_modules/** .git/** ...").desired_width(400.0)); ui.end_row();
-                ui.label("Options:");
+                ui.label(tr(&self.lang, "Options:", "选项：", "オプション：", "옵션:", "Опции:"));
                 ui.vertical(|ui| {
-                    ui.checkbox(&mut self.cleanup, "Cleanup after exit");
-                    ui.checkbox(&mut self.once, "Single instance only");
-                    ui.checkbox(&mut self.build_dictionary, "Build compression dictionary");
+                    ui.checkbox(&mut self.cleanup, tr(&self.lang, "Cleanup after exit", "退出后清理", "終了後にクリーンアップ", "종료 후 정리", "Очистка после выхода"));
+                    ui.checkbox(&mut self.once, tr(&self.lang, "Single instance only", "仅允许单实例", "単一インスタンスのみ", "단일 인스턴스만", "Только один экземпляр"));
+                    ui.checkbox(&mut self.build_dictionary, tr(&self.lang, "Build compression dictionary", "构建压缩字典", "圧縮辞書を構築", "압축 사전 빌드", "Построить словарь сжатия"));
                 }); ui.end_row();
             });
         });
@@ -429,15 +362,15 @@ impl WrappeApp {
             ui.add_space(40.0);
             ui.label(egui::RichText::new("wrappe GUI").size(32.0).strong());
             ui.add_space(8.0);
-            ui.label(egui::RichText::new("Pack executables into self-contained single binaries").size(14.0));
+            ui.label(egui::RichText::new(tr(&self.lang, "Pack executables into self-contained single binaries", "将可执行程序打包为自包含单文件", "実行ファイルを自己完結型の単一バイナリにパック", "실행 파일을 자체 포함 단일 바이너리로 패킹", "Упаковка исполняемых файлов в автономные бинарные файлы")).size(14.0));
             ui.add_space(20.0);
-            ui.label(format!("Version: {}", env!("CARGO_PKG_VERSION")));
+            ui.label(format!("{} {}", tr(&self.lang, "Version:", "版本：", "バージョン：", "버전:", "Версия:"), env!("CARGO_PKG_VERSION")));
             ui.add_space(8.0);
-            ui.label("Built with Rust + egui + zstd");
+            ui.label(tr(&self.lang, "Built with Rust + egui + zstd", "使用 Rust + egui + zstd 构建", "Rust + egui + zstd で構築", "Rust + egui + zstd로 빌드", "Собрано на Rust + egui + zstd"));
             ui.add_space(8.0);
             ui.hyperlink_to("GitHub: ruin321/wrappe-NEWGUI", "https://github.com/ruin321/wrappe-NEWGUI");
             ui.add_space(4.0);
-            ui.label(egui::RichText::new("Original project by Systemcluster").size(11.0).weak());
+            ui.label(egui::RichText::new(tr(&self.lang, "Original project by Systemcluster", "原始项目作者 Systemcluster", "オリジナルプロジェクト: Systemcluster", "원본 프로젝트: Systemcluster", "Оригинальный проект: Systemcluster")).size(11.0).weak());
             ui.add_space(40.0);
             egui::Frame::none()
                 .fill(if self.dark_mode { egui::Color32::from_rgb(35, 35, 42) } else { egui::Color32::from_rgb(245, 245, 248) })
@@ -453,7 +386,7 @@ impl WrappeApp {
                     ui.add_space(4.0);
                     ui.label(egui::RichText::new(tr(&self.lang, "For more options, use Basic or Advanced tabs.", "更多选项请使用基础或高级标签页。", "詳細オプションは基本または詳細タブをご利用ください。", "더 많은 옵션은 기본 또는 고급 탭을 사용하세요.", "Больше опций на вкладках Базовый и Продвинутый.")).size(12.0).weak());
                     ui.add_space(8.0);
-                    ui.label(egui::RichText::new(tr(&self.lang, "Memory Mode: runs from temp dir with auto-cleanup and single instance.", "内存模式：从临时目录运行，自动清理，单实例。", "メモリモード：一時ディレクトリから実行、自動クリーンアップ。", "메모리 모드: 임시 디렉토리에서 실행, 자동 정리.", "Режим памяти: запуск из врем. папки с автоочисткой.")).size(11.0).weak());
+                    ui.label(egui::RichText::new(tr(&self.lang, "Memory Mode: auto-cleanup + single instance. Admin Mode: requires elevation.", "内存模式：自动清理+单实例。管理员模式：需要提权运行。", "メモリモード：自動クリーンアップ+単一インスタンス。管理者モード：昇格が必要。", "메모리 모드: 자동 정리+단일 인스턴스. 관리자 모드: 권한 상승 필요.", "Режим памяти: автоочистка+один экземпляр. Режим админа: требует повышения.")).size(11.0).weak());
                 });
         });
     }
@@ -461,13 +394,11 @@ impl WrappeApp {
     fn build_config(&self) -> PackConfig {
         PackConfig {
             runner: self.runner.clone(), compression: self.compression,
-            unpack_target: self.unpack_target.as_str().to_string(),
-            unpack_directory: None, versioning: self.versioning.as_str().to_string(),
-            verification: self.verification.as_str().to_string(),
+            unpack_target: self.unpack_target.as_str().to_string(), unpack_directory: None,
+            versioning: self.versioning.as_str().to_string(), verification: self.verification.as_str().to_string(),
             version_string: if self.version_string.is_empty() { None } else { Some(self.version_string.clone()) },
             show_information: self.show_information.as_str().to_string(),
-            console: self.console.as_str().to_string(),
-            current_dir: self.current_dir.as_str().to_string(),
+            console: self.console.as_str().to_string(), current_dir: self.current_dir.as_str().to_string(),
             env: self.env_vars.split_whitespace().filter(|s| s.contains('=')).map(|s| s.to_string()).collect(),
             icon: if self.icon_path.is_empty() { None } else { Some(PathBuf::from(&self.icon_path)) },
             cleanup: self.cleanup, once: self.once, build_dictionary: self.build_dictionary,
@@ -480,18 +411,14 @@ impl WrappeApp {
     }
 
     fn start_packing(&mut self) {
-        self.packing = true; self.progress = 0.0;
-        self.progress_message = "Starting...".to_string();
+        self.packing = true; self.progress = 0.0; self.progress_message = "Starting...".to_string();
         self.result_message = None; self.result_error = false;
         let config = self.build_config();
         let (sender, receiver) = mpsc::channel();
         let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let cancelled_clone = cancelled.clone();
-        self.progress_receiver = Some(receiver);
-        self.cancel_flag = Some(cancelled);
-        let handle = thread::spawn(move || {
-            let _ = wrappe::pack(config, move |progress| { let _ = sender.send(progress); }, cancelled_clone);
-        });
+        self.progress_receiver = Some(receiver); self.cancel_flag = Some(cancelled);
+        let handle = thread::spawn(move || { let _ = wrappe::pack(config, move |progress| { let _ = sender.send(progress); }, cancelled_clone); });
         self.pack_thread = Some(handle);
     }
 }
