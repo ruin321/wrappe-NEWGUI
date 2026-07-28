@@ -293,6 +293,12 @@ impl WrappeApp {
                 for (i, r) in self.available_runners.iter().enumerate() { if ui.selectable_value(&mut self.runner_index, i, r).clicked() { self.runner = r.clone(); } }
             });
             ui.end_row();
+            ui.label(tr(&self.lang, "Options:", "选项：", "オプション：", "옵션:", "Опции:"));
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.memory_mode, tr(&self.lang, "Memory Mode", "内存模式", "メモリモード", "메모리 모드", "Режим памяти"));
+                ui.checkbox(&mut self.admin_mode, tr(&self.lang, "Run as Admin", "管理员运行", "管理者として実行", "관리자 권한", "Запуск от админа"));
+            });
+            ui.end_row();
         });
     }
 
@@ -352,6 +358,8 @@ impl WrappeApp {
                     ui.checkbox(&mut self.cleanup, tr(&self.lang, "Cleanup after exit", "退出后清理", "終了後にクリーンアップ", "종료 후 정리", "Очистка после выхода"));
                     ui.checkbox(&mut self.once, tr(&self.lang, "Single instance only", "仅允许单实例", "単一インスタンスのみ", "단일 인스턴스만", "Только один экземпляр"));
                     ui.checkbox(&mut self.build_dictionary, tr(&self.lang, "Build compression dictionary", "构建压缩字典", "圧縮辞書を構築", "압축 사전 빌드", "Построить словарь сжатия"));
+                    ui.checkbox(&mut self.memory_mode, tr(&self.lang, "Memory Mode", "内存模式", "メモリモード", "메모리 모드", "Режим памяти"));
+                    ui.checkbox(&mut self.admin_mode, tr(&self.lang, "Run as Admin", "管理员运行", "管理者として実行", "관리자 권한", "Запуск от админа"));
                 }); ui.end_row();
             });
         });
