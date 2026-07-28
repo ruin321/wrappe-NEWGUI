@@ -13,18 +13,32 @@ fn main() -> eframe::Result {
         "wrappe GUI",
         options,
         Box::new(|cc| {
-            // Try to add CJK font support without breaking default fonts
+            // Try to add CJK font support
             let mut fonts = egui::FontDefinitions::default();
-            let cjk_data = std::fs::read("C:/Windows/Fonts/msyh.ttc")
-                .or_else(|_| std::fs::read("C:/Windows/Fonts/simhei.ttf"))
-                .or_else(|_| std::fs::read("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"))
-                .ok();
-            if let Some(data) = cjk_data {
-                fonts.font_data.insert("cjk".to_owned(), egui::FontData::from_owned(data));
-                fonts.families.entry(egui::FontFamily::Proportional).or_default().push("cjk".to_owned());
-                fonts.families.entry(egui::FontFamily::Monospace).or_default().push("cjk".to_owned());
-                cc.egui_ctx.set_fonts(fonts);
+            // Windows fonts: try multiple to cover Chinese + Japanese + Korean
+            let font_paths = if cfg!(windows) {
+                vec![
+                    "C:/Windows/Fonts/msyh.ttc",       // Microsoft YaHei (CN)
+                    "C:/Windows/Fonts/malgun.ttf",      // Malgun Gothic (KR)
+                    "C:/Windows/Fonts/msgothic.ttc",    // MS Gothic (JP)
+                    "C:/Windows/Fonts/simhei.ttf",      // SimHei (CN fallback)
+                    "C:/Windows/Fonts/gulim.ttc",       // Gulim (KR fallback)
+                ]
+            } else {
+                vec![
+                    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                    "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+                ]
+            };
+            for path in font_paths {
+                if let Ok(data) = std::fs::read(path) {
+                    let name = format!("font_{}", fonts.font_data.len());
+                    fonts.font_data.insert(name.clone(), egui::FontData::from_owned(data));
+                    fonts.families.entry(egui::FontFamily::Proportional).or_default().push(name.clone());
+                    fonts.families.entry(egui::FontFamily::Monospace).or_default().push(name);
+                }
             }
+            cc.egui_ctx.set_fonts(fonts);
             cc.egui_ctx.set_visuals(egui::Visuals::dark());
             Ok(Box::new(app::WrappeApp::default()))
         }),
